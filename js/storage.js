@@ -10,7 +10,7 @@ settings.mic = Object.assign({on:false, sens:60, offset:0, check:"lenient"}, set
 settings.mic.cal = settings.mic.cal || {};
 settings.mic.on = false; // the microphone always starts off; the browser needs a click to start it
 settings.ai = Object.assign({provider:"gemini", remember:true, method:"auto", keys:{}, models:{}, baseUrl:""}, settings.ai || {});
-settings.ai.keys = settings.ai.keys || {}; settings.ai.models = settings.ai.models || {}; settings.ai.loaded = settings.ai.loaded || {};
+settings.ai.keys = settings.ai.keys || {}; settings.ai.models = settings.ai.models || {}; settings.ai.loaded = settings.ai.loaded || {}; settings.ai.customs = settings.ai.customs || []; settings.ai.bases = settings.ai.bases || {};
 if (settings.ai.key) { settings.ai.keys.anthropic = settings.ai.key; settings.ai.provider = "anthropic"; delete settings.ai.key; } // from v0.3.0
 if (settings.ai.model) { settings.ai.models.anthropic = settings.ai.model; delete settings.ai.model; }
 settings.artic = settings.artic !== false; // check how notes are played (open hi-hat, accents, ghost notes…)

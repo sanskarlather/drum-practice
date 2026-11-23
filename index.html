@@ -154,7 +154,7 @@
         <div class="eyebrow" style="margin-bottom:8px">Sheet reading</div>
         <p style="margin:0 0 10px;color:var(--soft);font-size:14px;line-height:1.55">PDFs and photos are read by one of two readers. Either way, the notes open in the editor so you can check them.</p>
         <ul style="margin:0 0 12px;padding-left:18px;color:var(--soft);font-size:13px;line-height:1.55">
-          <li><b>AI reader:</b> most accurate, handles photos. Uses <b>your own</b> key from Google Gemini (free tier), Groq (free plan), OpenRouter (free models), Anthropic Claude or another service.</li>
+          <li><b>AI reader:</b> most accurate, handles photos. Uses <b>your own</b> key from whichever AI service you have access to: Google Gemini, Groq, OpenRouter, Alibaba Cloud (Qwen), Mistral, Hugging Face, Anthropic Claude, or any OpenAI-compatible service you add.</li>
           <li><b>Offline reader:</b> free and private. Best on clean, printed sheets with simple rhythms.</li>
         </ul>
         <label style="display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--muted);margin-bottom:10px">Which reader
@@ -162,8 +162,11 @@
         <label style="display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--muted);margin-bottom:8px">AI provider
           <select id="aiProvider"></select></label>
         <p id="aiProvNote" class="muted" style="font-size:12px;line-height:1.5;margin:0 0 8px"></p>
+        <div id="aiNameRow" style="display:flex;gap:8px;align-items:flex-end;margin-bottom:8px">
+          <label style="display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--muted);flex:1">Service name<input type="text" id="aiName" maxlength="40"></label>
+          <button class="btn danger" type="button" id="aiDelService">Remove</button></div>
         <label id="aiBaseRow" style="display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--muted);margin-bottom:8px">Base URL
-          <input type="text" id="aiBase" spellcheck="false" placeholder="https://api.openai.com/v1"></label>
+          <input type="text" id="aiBase" spellcheck="false" placeholder="https://…/v1"></label>
         <label style="display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--muted)">Your API key
           <input type="password" id="aiKey" autocomplete="off" spellcheck="false"></label>
         <p id="aiKeyState" class="muted" style="font-size:12px;margin:6px 0"></p>

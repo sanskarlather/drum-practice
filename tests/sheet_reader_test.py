@@ -92,9 +92,12 @@ async def main():
           "gemini": {"candidates": [{"content": {"parts": [{"text": "thinking...", "thought": True}, {"text": tab}]}, "finishReason": "STOP"}], "usageMetadata": {"totalTokenCount": 2600}},
           "openrouter": {"choices": [{"message": {"content": "```\n" + tab + "\n```"}, "finish_reason": "stop"}], "model": "some/vision-model:free", "usage": {"total_tokens": 2500}},
           "groq": {"choices": [{"message": {"content": tab}, "finish_reason": "stop"}], "usage": {"total_tokens": 2500}},
+          "alibaba": {"choices": [{"message": {"content": tab}, "finish_reason": "stop"}]},
+          "mistral": {"choices": [{"message": {"content": [{"type": "text", "text": tab}]}, "finish_reason": "stop"}]},
+          "huggingface": {"choices": [{"message": {"content": tab}, "finish_reason": "stop"}]},
           "custom": {"choices": [{"message": {"content": tab}, "finish_reason": "stop"}], "usage": {"total_tokens": 2500}},
         }
-        for prov in ["gemini", "groq", "openrouter", "anthropic", "custom"]:
+        for prov in ["gemini", "groq", "openrouter", "alibaba", "mistral", "huggingface", "anthropic", "custom"]:
             await pg.evaluate("""([prov, reply]) => { settings.ai.provider = prov; settings.ai.remember = true; settings.ai.keys[prov] = 'test-key-' + prov;
               if (prov === 'custom') { settings.ai.baseUrl = 'https://llm.example.test/v1'; settings.ai.models.custom = 'vision-model'; }
               window.__req = null; window.fetch = async (url, o) => { window.__req = {url, headers: o.headers, body: JSON.parse(o.body)}; return new Response(JSON.stringify(reply), {status: 200}); }; }""", [prov, replies[prov]])
@@ -108,13 +111,40 @@ async def main():
               return {title: ED.title, bpm: ED.bpm, notes: ED.notes, url: __req.url, h: __req.headers, imgs,
                       model: b.model || __req.url.split('/models/')[1]}; }""")
             want = {"anthropic": "https://api.anthropic.com/v1/messages", "gemini": "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent",
-                    "openrouter": "https://openrouter.ai/api/v1/chat/completions", "groq": "https://api.groq.com/openai/v1/chat/completions", "custom": "https://llm.example.test/v1/chat/completions"}[prov]
+                    "openrouter": "https://openrouter.ai/api/v1/chat/completions", "groq": "https://api.groq.com/openai/v1/chat/completions", "custom": "https://llm.example.test/v1/chat/completions",
+                    "alibaba": "https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions", "mistral": "https://api.mistral.ai/v1/chat/completions", "huggingface": "https://router.huggingface.co/v1/chat/completions"}[prov]
             keyh = {"anthropic": ("x-api-key", "test-key-anthropic"), "gemini": ("x-goog-api-key", "test-key-gemini"),
-                    "openrouter": ("authorization", "Bearer test-key-openrouter"), "groq": ("authorization", "Bearer test-key-groq"), "custom": ("authorization", "Bearer test-key-custom")}[prov]
+                    "openrouter": ("authorization", "Bearer test-key-openrouter"), "groq": ("authorization", "Bearer test-key-groq"), "custom": ("authorization", "Bearer test-key-custom"),
+                    "alibaba": ("authorization", "Bearer test-key-alibaba"), "mistral": ("authorization", "Bearer test-key-mistral"), "huggingface": ("authorization", "Bearer test-key-huggingface")}[prov]
             check(f"{prov}: request goes to the right endpoint with the user's key", r["url"] == want and r["h"].get(keyh[0]) == keyh[1], r["url"])
             check(f"{prov}: key is not in the URL", "test-key" not in r["url"])
             check(f"{prov}: page image is sent", r["imgs"] >= 1)
             check(f"{prov}: answer becomes notes", r["title"] == "Test groove" and r["bpm"] == 92 and {"s": 24, "d": "floor"} in r["notes"] and {"s": 28, "d": "hhp"} in r["notes"], json.dumps(r["notes"]))
+        # Alibaba region: the base URL can be changed
+        await pg.evaluate("settings.ai.provider='alibaba'; srRenderSettings()")
+        await pg.click("nav.main button[data-view=library]")
+        check("Alibaba shows an editable base URL (region)", await pg.is_visible("#aiBase") and await pg.input_value("#aiBase") == "https://dashscope-intl.aliyuncs.com/compatible-mode/v1")
+        await pg.fill("#aiBase", "https://dashscope-us.aliyuncs.com/compatible-mode/v1"); await pg.press("#aiBase", "Tab")
+        check("changing the region address is used", await pg.evaluate("srBase('alibaba')") == "https://dashscope-us.aliyuncs.com/compatible-mode/v1")
+        # adding your own service
+        await pg.select_option("#aiProvider", "__add")
+        await pg.fill("#aiName", "SiliconFlow"); await pg.press("#aiName", "Tab")
+        await pg.fill("#aiBase", "https://api.example-llm.test/v1/"); await pg.press("#aiBase", "Tab")
+        await pg.fill("#aiKey", "sk-test-mine"); await pg.click("#aiSave")
+        mine = await pg.evaluate("({id: settings.ai.provider, label: provInfo(settings.ai.provider).label, base: srBase(), key: srKey(), opts: [...document.querySelectorAll('#aiProvider option')].map(o=>o.textContent)})")
+        check("a service can be added with its own name, address and key", mine["label"] == "SiliconFlow" and mine["base"] == "https://api.example-llm.test/v1" and mine["key"] == "sk-test-mine" and any("SiliconFlow" in o for o in mine["opts"]), json.dumps(mine))
+        await pg.evaluate(r"""()=>{ settings.ai.models[settings.ai.provider]='vision-x'; window.__u=null; window.__tries=0;
+          window.fetch = async (u,o) => { __u=u; __tries++; const b=JSON.parse(o.body);
+            // this service only accepts the image as a plain string
+            if (typeof b.messages[0].content[1].image_url !== 'string') return new Response(JSON.stringify({error:{message:"image_url must be a string"}}),{status:422});
+            return new Response(JSON.stringify({choices:[{message:{content:"BAR 1\nBD x..............."},finish_reason:"stop"}]}),{status:200}); }; }""")
+        res = await pg.evaluate("srAiRead([document.createElement('canvas')], null, 4).then(r=>({n:r.notes.length, url:__u, tries:__tries}))")
+        check("your own service is called, retrying with the other image format if needed", res == {"n": 1, "url": "https://api.example-llm.test/v1/chat/completions", "tries": 2}, str(res))
+        await pg.click("#aiDelService")
+        check("an added service can be removed", await pg.evaluate("settings.ai.customs.length") == 0 and await pg.evaluate("settings.ai.provider") == "gemini")
+        await pg.fill("#aiKey", "hf_testtoken"); await pg.click("#aiSave")
+        check("a Hugging Face token switches to Hugging Face", await pg.evaluate("settings.ai.provider") == "huggingface")
+        await pg.click("nav.main button[data-view=practice]")
         # drum-tab parser edge cases
         r = await pg.evaluate(r"""()=>{
           const a = srParseTab("BAR 1\nHH | x-x-x-x- |\nBD x.......x.......", 4);         // 8 cells = 8th notes, dashes and bars

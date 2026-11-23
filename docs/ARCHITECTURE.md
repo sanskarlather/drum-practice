@@ -82,7 +82,7 @@ Order matters only for code that runs at load time (later files may call functio
 
 ### Settings (saved as `drumapp.settings`)
 
-`metro`, `demo`, `hitSnd`, `vol`, `loop`, `wait`, `view`, `offset` (ms, USB/tap timing adjustment), `lastSong`, `kit` (active kit id), `mic`: `{sens, offset, check}`, and `ai`: `{provider, keys:{provider: key}, models:{provider: model}, baseUrl, remember, method}`. At runtime `settings.map` and `settings.mic.cal` point at the active kit's `map` and `cal`; they're saved with the kits, not in settings.
+`metro`, `demo`, `hitSnd`, `vol`, `loop`, `wait`, `view`, `offset` (ms, USB/tap timing adjustment), `lastSong`, `kit` (active kit id), `mic`: `{sens, offset, check}`, and `ai`: `{provider, keys:{provider: key}, models:{provider: model}, loaded:{provider: [model ids]}, bases:{provider: url}, customs:[{id, label}], remember, method}`. At runtime `settings.map` and `settings.mic.cal` point at the active kit's `map` and `cal`; they're saved with the kits, not in settings.
 
 ## From song to events
 
@@ -193,11 +193,15 @@ To compare against **several drums at once** (e.g. kick + hi-hat), the taught ba
 | `anthropic` | `api.anthropic.com/v1/messages` (+ `anthropic-dangerous-direct-browser-access`) | `x-api-key` | |
 | `groq` | `api.groq.com/openai/v1/chat/completions` | `Authorization: Bearer` | |
 | `openrouter` | `openrouter.ai/api/v1/chat/completions` (+ `reasoning: {effort: "low", exclude: true}`) | `Authorization: Bearer` | |
-| `custom` | `{base URL}/chat/completions` (OpenAI-compatible) | `Authorization: Bearer` (if a key is set) | |
+| `alibaba` | `dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions` (region editable) | `Authorization: Bearer` | |
+| `mistral` | `api.mistral.ai/v1/chat/completions` | `Authorization: Bearer` | |
+| `huggingface` | `router.huggingface.co/v1/chat/completions` | `Authorization: Bearer` | |
+| `custom` and user-added services | `{base URL}/chat/completions` (OpenAI-compatible) | `Authorization: Bearer` (if a key is set) | |
 
 - **One page per request**, and the answer is **compact drum tab**, not JSON: `BAR n` lines followed by one line per drum, e.g. `HH x.x.x.x.x.x.x.x.` (a code, then one character per 16th note). A full page is a few hundred tokens instead of thousands, which fits free models' output limits. `srParseTab()` tolerates small slips: dashes for rests, `|` bar marks, missing `BAR` lines, and lines with 4 or 8 characters (stretched to the bar).
 - "Thinking" shares the output budget on many providers, so it's kept low (`thinkingLevel: low` on Gemini, `reasoning.effort: low` on OpenRouter). If a model rejects that option, the request is retried without it. If an answer is cut off, the bars read so far are kept and the user is told to check the end. If nothing was written, the message explains that the model spent its budget thinking.
 - On 429 (rate limit) the app waits 20 s and retries once; on 500/503 it waits 5 s and retries once.
+- User-added services live in `settings.ai.customs` (`{id, label}`), with their address in `settings.ai.bases[id]`; `provInfo(id)` describes any provider. If a service rejects the image object, it's retried with `image_url` as a plain string, which some services expect.
 - Keys always go in headers, never in the URL. A key pasted under the wrong provider is recognised by its prefix (`AIza`, `gsk_`, `sk-or-`, `sk-ant-`) and the provider is switched.
 - **Keys are the user's own**, kept per provider in `settings.ai.keys` (localStorage) or in memory for the session only (`SR.sessionKeys`). No key exists in the code.
 - `srListModels()` calls each provider's model-list endpoint. It backs **Test key** and **Load models** and costs nothing.

@@ -2,6 +2,12 @@
 
 All notable changes to this project. Dates are YYYY-MM-DD.
 
+## [0.4.1] - 2026-11-23
+### Added
+- AI reader providers: **Alibaba Cloud Model Studio** (Qwen, region address editable), **Mistral** and **Hugging Face**.
+- **Add another service**: any number of your own OpenAI-compatible services, each with a name, base URL, key and model.
+- Retry with the plain-string image format for services that require it; Hugging Face tokens are recognised automatically.
+
 ## [0.4.0] - 2026-11-23
 ### Added
 - **Articulations everywhere**: open vs closed hi-hat, accents, ghost notes, rimshots, cross-stick, ride bell, flams and chokes.

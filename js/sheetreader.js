@@ -21,13 +21,29 @@ const AI_PROVIDERS = {
   openrouter: { label: "OpenRouter (free models)", keyUrl: "https://openrouter.ai/settings/keys", keyHint: "sk-or-…", base: "https://openrouter.ai/api/v1",
     models: [["openrouter/free", "Free models router (random free model)"]],
     note: "The free router picks a random free model each time, so results vary. For steadier results press “Load models” and pick a specific free vision model (they're listed first)." },
+  alibaba: { label: "Alibaba Cloud Model Studio (Qwen)", keyUrl: "https://www.alibabacloud.com/help/en/model-studio/get-api-key", keyHint: "sk-…", base: "https://dashscope-intl.aliyuncs.com/compatible-mode/v1", editBase: true,
+    models: [["qwen3-vl-plus", "Qwen3 VL Plus (vision)"]],
+    note: "Qwen vision models through Alibaba's OpenAI-compatible API. The address depends on your region: Singapore (default) https://dashscope-intl.aliyuncs.com/compatible-mode/v1, Virginia https://dashscope-us.aliyuncs.com/compatible-mode/v1, Beijing https://dashscope.aliyuncs.com/compatible-mode/v1. Keys differ per region. New accounts often get a free quota; check your console." },
+  mistral: { label: "Mistral", keyUrl: "https://console.mistral.ai/api-keys", keyHint: "your Mistral key", base: "https://api.mistral.ai/v1",
+    models: [["mistral-medium-3-5", "Mistral Medium 3.5 (vision)"]],
+    note: "Mistral's vision models through its Chat Completions API. Mistral's free mode may not include API access; check your plan. Use “Load models” to pick a model that reads images." },
+  huggingface: { label: "Hugging Face (Inference Providers)", keyUrl: "https://huggingface.co/settings/tokens", keyHint: "hf_…", base: "https://router.huggingface.co/v1",
+    models: [["Qwen/Qwen3.8-27B:novita", "Qwen3.8 27B via Novita (vision)"]],
+    note: "One token for many open models from many providers. Free accounts don't include monthly credits; PRO accounts include a small monthly amount. Model names look like owner/model:provider." },
   anthropic: { label: "Anthropic Claude", keyUrl: "https://console.anthropic.com/settings/keys", keyHint: "sk-ant-…",
     models: [["claude-sonnet-5-5", "Claude Sonnet 5.5"], ["claude-opus-5-5", "Claude Opus 5.5 (most careful)"], ["claude-haiku-5-5", "Claude Haiku 5.5 (cheapest)"]],
     note: "Needs prepaid API credit on your Anthropic account." },
-  custom: { label: "Other OpenAI-compatible service", keyUrl: "", keyHint: "your key (if it needs one)",
+  custom: { label: "Other OpenAI-compatible service", keyUrl: "", keyHint: "your key (if it needs one)", editBase: true,
     models: [],
-    note: "For OpenAI, a local Ollama or LM Studio server (free and private, on your own computer), etc. Enter its base URL (usually ending in /v1) and a model that can read images. The service must allow requests from web pages (for Ollama, set OLLAMA_ORIGINS=*)." },
+    note: "Almost every AI service offers an “OpenAI-compatible” API: OpenAI, Together, Fireworks, DeepInfra, NVIDIA, xAI, Cerebras, SambaNova, SiliconFlow, a local Ollama or LM Studio server, and more. Enter its base URL (from its docs, usually ending in /v1) and a model that can read images. The service must allow requests from web pages (for Ollama, set OLLAMA_ORIGINS=*). Use “Add another service” to keep several." },
 };
+// Services you add yourself: {id, label, base}. Each keeps its own key and model.
+function provInfo(p){
+  if (AI_PROVIDERS[p]) return AI_PROVIDERS[p];
+  const c = (settings.ai.customs || []).find(x => x.id === p);
+  return c ? { label: c.label || "My service", keyUrl: "", keyHint: "your key (if it needs one)", editBase: true, mine: true, models: [],
+    note: "A service you added. Enter its base URL (usually ending in /v1) and pick a model that reads images. It must use the OpenAI-compatible Chat Completions API and allow requests from web pages." } : AI_PROVIDERS.custom;
+}
 const SR_MAX_PAGES = 8;
 
 /* ============ loading pages as canvases ============ */
@@ -136,10 +152,10 @@ function srTabNotes(parsed, startBar){
 }
 const aiProv = () => settings.ai.provider;
 function srKey(prov = aiProv()){ return (settings.ai.remember ? settings.ai.keys[prov] : SR.sessionKeys[prov]) || ""; }
-function srModel(prov = aiProv()){ return settings.ai.models[prov] || (AI_PROVIDERS[prov].models[0] || [""])[0]; }
+function srModel(prov = aiProv()){ return settings.ai.models[prov] || (provInfo(prov).models[0] || [""])[0]; }
 function srBase(prov = aiProv()){
-  if (AI_PROVIDERS[prov].base) return AI_PROVIDERS[prov].base;
-  return (settings.ai.baseUrl || "").trim().replace(/\/+$/, "").replace(/\/chat\/completions$/, "");
+  const P = provInfo(prov), own = (settings.ai.bases && settings.ai.bases[prov]) || (prov === "custom" ? settings.ai.baseUrl : "");
+  return ((P.editBase && own) || P.base || own || "").trim().replace(/\/+$/, "").replace(/\/chat\/completions$/, "");
 }
 function srJpeg(c, maxEdge = 1568){
   const s = Math.min(1, maxEdge / Math.max(c.width, c.height));
@@ -165,7 +181,7 @@ async function srFetchRetry(url, opts, onStep){
   return r;
 }
 function srErrMsg(r){ try { const j = JSON.parse(r.text); const e = j.error || j; return (e.message || (e.metadata && e.metadata.raw) || (typeof e === "string" ? e : "")) + ""; } catch (e) { return r.text.slice(0, 200); } }
-const provName = prov => AI_PROVIDERS[prov].label.replace(/ \(.*\)$/, "");
+const provName = prov => provInfo(prov).label.replace(/ \(.*\)$/, "");
 function srApiError(r, prov = aiProv()){
   const msg = String(srErrMsg(r) || ""), name = provName(prov);
   if (r.status === 401 || /API_KEY_INVALID|invalid.*key|incorrect api key/i.test(msg)) return `The ${name} API key was rejected. Check it in Library → Sheet reading, and that it is a key from ${name}.`;
@@ -219,6 +235,7 @@ const AI_CALL = {
     let r = await go();
     if (!r.ok && r.status === 400 && /reasoning/i.test(r.text)) { delete body.reasoning; r = await go(); }
     if (!r.ok && r.status === 400 && /max_tokens|max_completion/i.test(r.text)) { body.max_tokens = 4096; r = await go(); }
+    if (!r.ok && (r.status === 400 || r.status === 422) && /image_url|content|url/i.test(r.text)) { body.messages[0].content[1] = { type: "image_url", image_url: "data:image/jpeg;base64," + img }; r = await go(); } // older style some services use
     if (!r.ok) throw new Error(srApiError(r, prov));
     const data = JSON.parse(r.text);
     if (data.error) throw new Error(srApiError({ status: data.error.code || 500, text: JSON.stringify(data) }, prov));
@@ -229,9 +246,9 @@ const AI_CALL = {
   },
 };
 async function srAiRead(canvases, onStep, beatsHint = 4){
-  const prov = aiProv(), P = AI_PROVIDERS[prov], key = srKey(prov), model = srModel(prov), name = provName(prov);
-  if (!key && prov !== "custom") throw new Error(`Add your ${name} API key first (Library → Sheet reading).`);
-  const call = AI_CALL[prov] || AI_CALL.openai;
+  const prov = aiProv(), P = provInfo(prov), key = srKey(prov), model = srModel(prov), name = provName(prov);
+  if (!key && !P.editBase) throw new Error(`Add your ${name} API key first (Library → Sheet reading).`);
+  const call = AI_CALL[prov] || AI_CALL.openai; // everything except Gemini and Claude speaks the OpenAI-compatible API
   const all = { title:"", bpm:0, beats: beatsHint, notes: [], bars: 0, reports: [], usage: 0, used: new Set() };
   for (let p = 0; p < canvases.length; p++) {
     onStep && onStep(canvases.length > 1 ? `Reading page ${p + 1} of ${canvases.length} with ${name}…` : `Reading the page with ${name}…`);
@@ -286,6 +303,7 @@ function srGuessProvider(k){
   if (/^sk-or-/.test(k)) return "openrouter";
   if (/^sk-ant-/.test(k)) return "anthropic";
   if (/^gsk_/.test(k)) return "groq";
+  if (/^hf_/.test(k)) return "huggingface";
   return null;
 }
 /* ============ Offline reader (optical music recognition) ============ */
@@ -594,7 +612,7 @@ async function srOpen(file){
   } catch (e) { console.error(e); $("#srStatus").textContent = ""; $("#srErr").textContent = "Couldn't open that file: " + e.message; }
 }
 function srMethodHint(){
-  const m = $("#srMethod").value, prov = aiProv(), P = AI_PROVIDERS[prov], k = !!srKey(prov) || prov === "custom";
+  const m = $("#srMethod").value, prov = aiProv(), P = provInfo(prov), k = !!srKey(prov) || !!P.editBase;
   const name = P.label.replace(/ \(.*\)$/, "");
   $("#srHint").innerHTML = m === "ai"
     ? (k ? `Uses <b>your</b> ${esc(name)} key, model ${esc(srModel(prov))}. ${prov === "gemini" || prov === "groq" || /:free$|openrouter\/free/.test(srModel(prov)) ? "Free within the provider's limits." : "May be charged to your account."}` : `<span style="color:var(--amber)">No ${esc(name)} key set.</span> Add one under Library → Sheet reading, or use the offline reader.`)
@@ -624,18 +642,20 @@ async function srGo(){
 
 /* ============ settings card ============ */
 function srRenderSettings(){
-  const prov = aiProv(), P = AI_PROVIDERS[prov], k = srKey(prov);
+  const prov = aiProv(), P = provInfo(prov), k = srKey(prov);
   $("#aiProvider").value = prov; $("#aiMethod").value = settings.ai.method; $("#aiRemember").checked = settings.ai.remember;
   $("#aiKey").placeholder = P.keyHint; $("#aiKey").value = "";
-  $("#aiKeyState").textContent = k ? (settings.ai.remember ? "Key saved on this device: ••••" + k.slice(-4) : "Key set for this session only: ••••" + k.slice(-4)) : (prov === "custom" ? "No key set (some local servers don't need one)." : "No key set for this provider.");
-  $("#aiBaseRow").hidden = prov !== "custom"; $("#aiBase").value = settings.ai.baseUrl || "";
+  $("#aiKeyState").textContent = k ? (settings.ai.remember ? "Key saved on this device: ••••" + k.slice(-4) : "Key set for this session only: ••••" + k.slice(-4)) : (P.editBase ? "No key set (some local servers don't need one)." : "No key set for this provider.");
+  $("#aiProvider").innerHTML = srProviderOptions(); $("#aiProvider").value = prov;
+  $("#aiBaseRow").hidden = !P.editBase; $("#aiBase").value = srBase(prov);
+  $("#aiNameRow").hidden = !P.mine; $("#aiName").value = P.mine ? P.label : "";
   srRenderModels();
   $("#aiProvNote").textContent = P.note;
   const link = $("#aiKeyLink"); link.hidden = !P.keyUrl; if (P.keyUrl) { link.href = P.keyUrl; link.textContent = "Get a " + P.label.replace(/ \(.*\)$/, "") + " key"; }
 }
 // Model drop-down: suggested models + the ones "Load models" found (remembered per provider) + "type a name".
 function srRenderModels(){
-  const prov = aiProv(), P = AI_PROVIDERS[prov], cur = srModel(prov), named = Object.fromEntries(P.models);
+  const prov = aiProv(), P = provInfo(prov), cur = srModel(prov), named = Object.fromEntries(P.models);
   const loaded = (settings.ai.loaded && settings.ai.loaded[prov]) || [];
   const ids = [...new Set([...P.models.map(m => m[0]), ...loaded])];
   if (cur && !ids.includes(cur)) ids.unshift(cur);
@@ -645,10 +665,27 @@ function srRenderModels(){
   $("#aiModel").hidden = sel.value !== "__type"; $("#aiModel").value = cur || "";
   $("#aiModelCount").textContent = loaded.length ? `${loaded.length} models loaded from your account.` : "Press “Load models” to see every model your key can use.";
 }
+function srProviderOptions(){
+  return Object.entries(AI_PROVIDERS).map(([id, P]) => `<option value="${id}">${esc(P.label)}</option>`).join("")
+    + (settings.ai.customs || []).map(c => `<option value="${c.id}">${esc(c.label || "My service")} (added by you)</option>`).join("")
+    + `<option value="__add">+ Add another service…</option>`;
+}
 function srSetKey(prov, v){ if (settings.ai.remember) { settings.ai.keys[prov] = v; SR.sessionKeys[prov] = ""; } else { SR.sessionKeys[prov] = v; settings.ai.keys[prov] = ""; } }
 function srWire(){
-  $("#aiProvider").innerHTML = Object.entries(AI_PROVIDERS).map(([id, P]) => `<option value="${id}">${esc(P.label)}</option>`).join("");
-  $("#aiProvider").onchange = e => { settings.ai.provider = e.target.value; saveSettings(); srRenderSettings(); };
+  $("#aiProvider").onchange = e => {
+    if (e.target.value === "__add") {
+      const c = { id: "c" + Date.now().toString(36), label: "My service " + ((settings.ai.customs || []).length + 1) };
+      (settings.ai.customs = settings.ai.customs || []).push(c); settings.ai.provider = c.id; saveSettings(); srRenderSettings();
+      toast("Name it, enter its base URL and key, then Load models"); $("#aiName").focus(); return;
+    }
+    settings.ai.provider = e.target.value; saveSettings(); srRenderSettings();
+  };
+  $("#aiName").onchange = e => { const c = (settings.ai.customs || []).find(x => x.id === aiProv()); if (c) { c.label = e.target.value.trim() || c.label; saveSettings(); srRenderSettings(); } };
+  $("#aiDelService").onclick = () => {
+    const id = aiProv(); settings.ai.customs = (settings.ai.customs || []).filter(x => x.id !== id);
+    delete settings.ai.keys[id]; delete settings.ai.models[id]; if (settings.ai.bases) delete settings.ai.bases[id];
+    settings.ai.provider = "gemini"; saveSettings(); srRenderSettings(); toast("Service removed");
+  };
   $("#aiSave").onclick = () => {
     const v = $("#aiKey").value.trim(); let prov = aiProv();
     if (!v) { toast("Paste your API key first"); return; }
@@ -666,11 +703,11 @@ function srWire(){
     settings.ai.models[aiProv()] = e.target.value; saveSettings(); srRenderModels();
   };
   $("#aiModel").onchange = e => { settings.ai.models[aiProv()] = e.target.value.trim(); saveSettings(); srRenderModels(); };
-  $("#aiBase").onchange = e => { settings.ai.baseUrl = e.target.value.trim(); saveSettings(); };
+  $("#aiBase").onchange = e => { (settings.ai.bases = settings.ai.bases || {})[aiProv()] = e.target.value.trim(); if (aiProv() === "custom") settings.ai.baseUrl = e.target.value.trim(); saveSettings(); };
   $("#aiMethod").onchange = e => { settings.ai.method = e.target.value; saveSettings(); };
   const listBtn = async (btn, label, ok) => {
     const prov = aiProv(), k = $("#aiKey").value.trim() || srKey(prov);
-    if (!k && prov !== "custom") { toast("Paste or save a key first"); return; }
+    if (!k && !provInfo(prov).editBase) { toast("Paste or save a key first"); return; }
     btn.disabled = true; btn.textContent = "Checking…";
     try { const ids = await srListModels(prov, k); ok(ids); }
     catch (e) { toast(e.message); } finally { btn.disabled = false; btn.textContent = label; }

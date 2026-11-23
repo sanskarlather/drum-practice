@@ -57,7 +57,7 @@ It runs entirely in the browser: there is no server or account, and nothing you 
 **Music**
 - 15 built-in lessons, from "hi-hat only" to fills around the toms, accents, open hi-hats, ghost notes, cross-stick with ride bell, flams and rimshots.
 - Import **MIDI** (`.mid`) and **MusicXML** (`.musicxml`, `.xml`) files.
-- **Read a PDF or photo of drum sheet music automatically**, with the AI reader (your own key from Google Gemini, Groq, OpenRouter, Anthropic Claude or any OpenAI-compatible service; Gemini, Groq and OpenRouter have free options, and a local Ollama/LM Studio model is free and private) or the free offline reader.
+- **Read a PDF or photo of drum sheet music automatically**, with the AI reader (your own key from whichever AI service you have access to: Google Gemini, Groq, OpenRouter, Alibaba Cloud (Qwen), Mistral, Hugging Face, Anthropic Claude, or any OpenAI-compatible service you add yourself; several have free options, and a local Ollama/LM Studio model is free and private) or the free offline reader.
 - A **note editor**: click a grid, or **record from your kit** after a count-in.
 - Your songs and best scores are saved in your browser.
 
@@ -126,10 +126,15 @@ In **Library**, choose **PDF or photo** (or drop the file on the page). The app 
 | **Google Gemini** (default) | Free tier, no payment needed; limited requests per day. On the free tier Google may use what you send to improve its products. | [aistudio.google.com/apikey](https://aistudio.google.com/apikey) |
 | **Groq** | Free plan with rate limits; very fast. Vision models: Llama 4 Scout (default), Qwen 3.8 27B | [console.groq.com/keys](https://console.groq.com/keys) |
 | **OpenRouter** | Free models (ending in `:free`, or the `openrouter/free` router, which picks a random one) with daily limits; paid models too | [openrouter.ai/settings/keys](https://openrouter.ai/settings/keys) |
+| **Alibaba Cloud Model Studio** | Qwen vision models; new accounts often get a free quota. Pick your region's address (Singapore, Virginia or Beijing) | Model Studio console |
+| **Mistral** | Vision models; check whether your plan includes API access | [console.mistral.ai](https://console.mistral.ai/api-keys) |
+| **Hugging Face** | Many open models from many providers with one token; free accounts have no monthly credits, PRO includes a small amount | [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens) |
 | **Anthropic Claude** | Needs prepaid API credit | [console.anthropic.com](https://console.anthropic.com/settings/keys) |
-| **Other OpenAI-compatible** | Depends on the service. A local **Ollama** or **LM Studio** server with a vision model is free and private (runs on your computer) | From that service; enter its base URL too |
+| **Any other service** | Almost every AI service has an OpenAI-compatible API (OpenAI, Together, Fireworks, DeepInfra, NVIDIA, xAI, Cerebras, SambaNova, SiliconFlow…). Choose **+ Add another service**, give it a name and its base URL. Add as many as you like, each with its own key and model. A local **Ollama** or **LM Studio** server with a vision model is free and private | From that service |
 
 **Your own API key.** The AI reader never uses a key built into the app: there isn't one. Each person who wants it pastes their own key. It's stored only in that browser (or for the current session only, if you untick *Remember*), sent only to the provider you chose, and never part of this repository. So nobody using your copy of the app can run up charges on your account. **Test key** and **Load models** only list the models your key can use, which costs nothing. Without a key, the app uses the offline reader.
+
+**Browser access:** the app calls these services straight from your browser, so a service must allow that (CORS). Most of the ones above do. If a service refuses, the app says it couldn't reach it; use OpenRouter or Hugging Face, which route to many of the same models, or another provider.
 
 **How the AI is asked:** each page is sent on its own, and the AI answers in compact drum-tab lines (`HH x.x.x.x.x.x.x.x.`), one per drum per bar. That keeps answers short, so they fit within free models' output limits; "thinking" is kept low where the provider allows. If one provider is busy or at its free limit, the app waits and retries once; you can also switch provider and press **Read again**.
 
