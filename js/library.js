@@ -2,13 +2,13 @@
 /* ---------- Library ---------- */
 function songRow(s, list){
   const r = h("div",{class:"song"});
-  const total = s.notes.length; const best = bests[s.id];
-  r.innerHTML = `<div class="t"><b>${esc(s.title)}</b><span>${esc(s.desc || s.source || "")} · ${s.bpm} BPM · ${s.bars} bar${s.bars>1?"s":""}</span></div><span class="best">${best!=null?"Best "+best+"%":total+" notes"}</span>`;
+  const total = s.notes.length; const rec = P.songs[s.id];
+  r.innerHTML = `<div class="t"><b>${esc(s.title)}</b><span>${esc(s.desc || s.source || "")} · ${s.bpm} BPM · ${s.bars} bar${s.bars>1?"s":""}</span></div><div class="rec">${starsHtml(rec ? rec.stars||0 : 0)}<span>${rec ? "Best "+rec.best+"%" : total+" notes"}</span></div>`;
   const acts = h("div",{class:"acts"});
-  const p = h("button",{class:"btn primary",type:"button"},"Practise"); p.onclick=()=>{ loadSong(s); show("practice"); };
+  const p = h("button",{class:"btn primary",type:"button"},"Practise"); p.onclick=()=>{ E.routine = false; loadSong(s); show("practice"); };
   const e = h("button",{class:"btn",type:"button"},"Edit"); e.onclick=()=>openEditor(s);
   acts.append(p,e);
-  if (!s.builtin) { const del = h("button",{class:"btn danger",type:"button","aria-label":"Delete "+s.title},"Delete"); del.onclick=()=>{ if (confirmDelete(s)) { songs = songs.filter(x=>x.id!==s.id); store.set("songs",songs); renderLibrary(); toast("Deleted"); } }; acts.append(del); }
+  if (!s.builtin) { const del = h("button",{class:"btn danger",type:"button","aria-label":"Delete "+s.title},"Delete"); del.onclick=()=>{ if (confirmDelete(s)) { songs = songs.filter(x=>x.id!==s.id); store.set("songs",songs); audioDel(s.id); renderLibrary(); toast("Deleted"); } }; acts.append(del); }
   r.appendChild(acts); list.appendChild(r);
 }
 let pendingDelete = null;
@@ -18,6 +18,7 @@ function renderLibrary(){
   const sl = $("#songList"); sl.innerHTML="";
   if (!songs.length) sl.innerHTML = '<p class="muted" style="margin:0;font-size:14px">Nothing here yet. Import a file or write a pattern in the note editor.</p>';
   songs.forEach(s=>songRow(s,sl));
+  renderPracticeLists();
 }
 function saveSong(s){ s.builtin=false; const i = songs.findIndex(x=>x.id===s.id); if (i>=0) songs[i]=s; else songs.push(s); store.set("songs",songs); renderLibrary(); }
 
@@ -29,6 +30,7 @@ async function importFile(file){
     else if (ext==="xml" || ext==="musicxml") { const s = parseMusicXML(await file.text(), name); finishImport(s, "MusicXML"); }
     else if (ext==="mxl") toast("Compressed .mxl isn't supported yet. Export as uncompressed MusicXML (.musicxml).");
     else if (ext==="pdf" || file.type.startsWith("image/")) srOpen(file);
+    else if (file.type.startsWith("audio/") || /^(mp3|wav|m4a|ogg|oga|flac|aac|opus|webm)$/.test(ext)) arOpen(file);
     else toast("That file type isn't supported");
   } catch(err) { console.error(err); toast("Couldn't read that file: "+err.message); }
 }

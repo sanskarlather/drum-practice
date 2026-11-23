@@ -3,11 +3,15 @@
 This guide walks through every screen, assuming you've never played drums before.
 
 - [The idea](#the-idea)
+- [Today: your daily routine](#today-your-daily-routine)
+- [Scores, stars and the speed builder](#scores-stars-and-the-speed-builder)
 - [Practice screen](#practice-screen)
+- [Rudiments and daily basics](#rudiments-and-daily-basics)
 - [Library](#library)
 - [Note editor](#note-editor)
 - [Articulations](#articulations)
 - [Reading sheet music](#reading-sheet-music)
+- [Song recordings and playing along](#song-recordings-and-playing-along)
 - [Kit setup](#kit-setup)
 - [Tips for beginners](#tips-for-beginners)
 - [Frequently asked questions](#frequently-asked-questions)
@@ -20,6 +24,35 @@ Drum music is a pattern of *which* drum to hit and *when*. The app shows both on
 - **When:** a coloured ring starts wide and shrinks onto the drum. Hit at the moment the ring touches the edge.
 - **With what:** a white tag on the drum says *Right* or *Left* (hand), or *R foot* / *L foot*.
 - **What's after that:** a dashed outline and "NEXT" mark the following drum, so you can get ready.
+
+## Today: your daily routine
+
+![Today screen](screenshots/today.png)
+
+**Today** is where the app opens once you've practised. It shows:
+
+- **Day streak:** days in a row with at least 5 minutes of practice (or a finished routine).
+- **Minutes today** against your **daily goal** (5 minutes to 1 hour, under Settings on the same screen).
+- **Level and XP.** You earn XP for good hits and stars. With Wait for me on you earn half.
+- **Your routine:** a new plan every day.
+  1. **Warm-up:** two daily basics, starting with the ones you haven't got 3 stars on yet.
+  2. **New rudiment:** the next one you haven't learned (2 stars). They come in an order that builds up: single strokes, doubles, the paradiddle, flams, drags, then the rest.
+  3. **Review:** a rudiment you already know.
+  4. **Groove:** the next beginner lesson without 3 stars.
+  5. **Your song:** if you have any.
+
+  Each item is done after **two passes at 70% or more**. **Start routine** opens the first unfinished item; when it's done, a *Next* button appears at the top of the practice screen and on the end screen. Finishing the whole routine gives 50 bonus XP.
+- **This week:** minutes per day; green bars reached your goal.
+- **Badges:** 18 to earn, such as a 7-day streak, *Flawless* (100% in a pass), *Ten rudiments* and *Paradiddle 120*.
+- **Fastest clean tempos:** the quickest you've played each rudiment or basic at 90% or more.
+
+## Scores, stars and the speed builder
+
+- **Points:** Perfect 100, Good 70, early or late 20, right time with the wrong touch 30.
+- **Combo:** every 8 good hits in a row raises the multiplier (×2, ×3, up to ×4). A miss or a bad hit resets it.
+- **Stars per pass** (once through the pattern; every loop counts): 70% = 1 star, 85% = 2, 95% = 3. With **Wait for me** you can get 1 star at most.
+- After each loop a message shows that pass's score and stars. At the end of a song (Loop off) the end screen shows stars, score, XP, right- and left-hand accuracy, and any new personal best.
+- **Speed builder** (on by default; switch it under *Sounds*): two clean loops in a row (90%+) and the tempo goes up 5 BPM, up to the pattern's goal tempo. Two loops under 60% and it goes down 5 BPM. The fastest clean tempo is saved, and next time you start 5 BPM below it.
 
 ## Practice screen
 
@@ -69,6 +102,16 @@ How the grades work:
 - **App drum sounds when I hit:** for when your module is muted. Leave it off normally: the Nitro Mesh makes its own sound.
 - **Listen with microphone:** turns on microphone mode (set it up in Kit setup first).
 
+### Layouts
+Choose at the bottom of the screen. The choice is remembered.
+
+![Hands layout playing the paradiddle](screenshots/layout-hands.png)
+
+- **Arena:** score, combo and stars large at the top, and under the kit a lane showing the next two beats (one row per drum, dots moving to the orange line; big dots are accents, small ones ghost notes).
+- **Coach:** the kit plus big *Now* and *Next* cards that say which hand or foot to use and how to play the note ("Left hand: barely touch it").
+- **Hands:** for rudiments and hand exercises. A big sticking row for the current bar (R in blue, L in orange; `>` accent, flam, drag, buzz), two large hand pads that light up for the hand to use, right and left accuracy, and the speed-builder ladder. The kit is hidden; play on your snare pad.
+- **Phone sideways:** on a phone in landscape the kit fills the screen, with *Coming up* on the left, your numbers on the right and a thin control bar. This happens automatically in any layout.
+
 ### Controls at the bottom
 - **Back to start** and **Play / Pause** (or press Enter).
 - **Loop:** repeat the song until you stop it.
@@ -78,6 +121,24 @@ How the grades work:
 
 ### Sheet music strip
 A simplified version of real drum notation, scrolling with the music. Cymbals are drawn as **x**, drums as dots. From top to bottom: crash, hi-hat, ride, toms, snare (middle), floor tom, kick (bottom), hi-hat pedal (below). Glance at it while you play: over time you'll start reading it.
+
+## Rudiments and daily basics
+
+Both are in the **Library**, grouped by type (tap a group to filter). Each row shows the sticking, your stars, and your best clean tempo against the goal tempo.
+
+**Rudiments:** all 40 international drum rudiments in six groups: single-stroke rolls, multiple-bounce rolls, double-stroke rolls, diddles (paradiddles), flams and drags. They're played on the snare. The sheet shows R and L under every note, and the practice screen shows the hand on the drum. How each one is written:
+
+- **Flam:** a soft grace note from the other hand just before the main stroke. **Drag:** two quick soft bounces before the main stroke. **Buzz:** press the stick in so it bounces many times. On an e-kit these extra hits are expected and ignored; you're judged on the main stroke.
+- Rudiments with triplet feels (flam accent, Swiss Army triplet, ratamacues, paradiddle-diddle…) use a triplet grid, and the counter says *1 trip let*.
+
+**Daily basics** are the movements to repeat every day:
+
+- *Time and counting:* quarter, 8th and 16th notes and triplets, each counted out loud; a note ladder (1, 2, then 4 notes per beat); **keep time when the click drops out** (the click plays only in bars 1 and 3); **click on 2 and 4** (the click acts as the backbeat).
+- *Hands:* right hand alone, left hand alone, doubles, accent on the beat, a moving accent, loud vs soft (accents and ghost notes), around the toms.
+- *Feet:* kick on every beat, kick plus hi-hat foot, kick in 8ths.
+- *Hands and feet together:* hand and kick alternating, hands-then-kick triplets, hi-hat with backbeat, four on the floor, all four limbs.
+
+Start every one slowly. The speed builder takes you up as you get them clean. You can copy any of them into the note editor (**Edit**) and change it.
 
 ## Library
 
@@ -97,7 +158,7 @@ Imported songs always open in the editor first, so you can check them.
 
 ![Note editor](screenshots/editor.png)
 
-- Each **row** is a drum; each **column** is a 16th note. The numbers on top are beats (1, 2, 3, 4), with **&** halfway between.
+- Each **row** is a drum; each **column** is one step of the **Grid** (16th notes unless you choose 8ths, 8th-note triplets, 16th-note triplets or 32nds). The numbers on top are beats (1, 2, 3, 4), with **&** (or *trip let*) between. Changing the grid keeps notes at the same moment in the bar.
 - Choose **how** the note is played above the grid: Normal, Accent, Ghost note, Open hi-hat, Rimshot, Cross-stick, Ride bell, Flam or Choke. Then **click** a square to add it. Clicking a note again with the same choice removes it; with a different choice it changes it. **Drag** to paint several. Choices that don't fit a drum (an open snare) add a normal hit instead.
 - **Title, Tempo, Bars, Beats per bar:** set these first. Reducing bars removes notes past the end.
 - **Read notes from a sheet:** reads a PDF or photo and loads the notes (see below). The sheet stays visible above the grid; **Read again** retries with the other reader.
@@ -162,6 +223,23 @@ Keys are stored only in this browser and sent only to the provider you chose. Th
 - Simple grooves and fills read well. Triplets, repeat signs, "repeat bar" marks, multi-bar rests and very dense 32nd-note passages don't. Use the AI reader for those.
 - The offline reader finds which drum and when, but **not** accents, ghost notes or open hi-hats. Add those in the editor with the articulation buttons, or use the AI reader, which transcribes them.
 
+## Song recordings and playing along
+
+**Get the drum notes from a recording.** In the Library press **Song recording** (or drop an MP3, WAV, M4A, OGG or FLAC file). Choose:
+
+- **AI listening:** for full songs with every instrument. It uses your own key under *Sheet reading* with a service that can listen to audio: **Google Gemini** (free tier) is the easiest. OpenAI-compatible services work only if their model accepts audio. Claude can't listen to audio. Up to about 3 minutes are sent.
+- **Offline:** free and private, but only for recordings of **drums alone** with a steady tempo. It finds the tempo and beat 1, then sorts each hit into kick, snare, toms, closed or open hi-hat and crash by its sound.
+
+The notes open in the editor. The recording stays attached to the song, so you can practise **with the actual song playing**.
+
+**Play along.** For any song with a recording (also: *Note editor → Song recording → Add*, for a song you wrote or imported):
+
+- In practice, turn on **Play the song recording** under *Sounds* and set its volume. The song follows the tempo slider and keeps its pitch, pauses when you pause, and waits with *Wait for me*.
+- In the editor, set **Bar 1 starts at** (seconds into the recording) and the recording's tempo so it lines up; the ±0.05 s buttons nudge it.
+- With the microphone on, use headphones, or the mic will hear the song.
+
+**Full scores:** a PDF, photo or MusicXML with every instrument works too. Only the drum part is read; other instruments' staves are skipped.
+
 ## Kit setup
 
 ![Kit setup](screenshots/setup.png)
@@ -205,12 +283,13 @@ If hits are always reported late (or early) even when they sound right, move **H
 
 ## Tips for beginners
 
-1. **Go slow.** If you're under 80% on target, lower the tempo by 10 BPM.
-2. **Use Wait for me** the first few times through a new lesson.
-3. **Count out loud:** "one and two and three and four and".
-4. **Relax your grip.** Let the stick bounce off the pad.
-5. **Little and often:** 15 minutes a day beats an hour once a week.
-6. **Move on** to the next lesson when you can do the current one twice in a row at 90% or more.
+1. **Do your routine every day.** Ten to fifteen minutes of basics and rudiments every day builds timing and hands faster than long sessions now and then.
+2. **Go slow.** If you're under 80% on target, lower the tempo by 10 BPM. Let the speed builder raise it.
+3. **Use Wait for me** the first few times through a new lesson.
+4. **Count out loud:** "one and two and three and four and".
+5. **Relax your grip.** Let the stick bounce off the pad.
+6. **Watch your weaker hand.** The Hands layout shows right and left accuracy separately.
+7. **Move on** to the next lesson when you can do the current one twice in a row at 90% or more.
 
 ## Frequently asked questions
 

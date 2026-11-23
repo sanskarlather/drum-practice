@@ -1,8 +1,8 @@
 "use strict";
 /* ---------- Lessons ---------- */
-function pat(id, title, desc, bpm, bars, rows, beats=4){
+function pat(id, title, desc, bpm, bars, rows, beats=4, sub=4){
   // rows: {drum: ["x...", ...] per bar, or a single string used for every bar}
-  const spb = beats*4, notes = [];
+  const spb = beats*sub, notes = [];
   for (const [d, val] of Object.entries(rows)) {
     for (let b=0; b<bars; b++) {
       const s = Array.isArray(val) ? (val[b] ?? "") : val;
@@ -10,7 +10,7 @@ function pat(id, title, desc, bpm, bars, rows, beats=4){
       for (let i=0; i<s.length && i<spb; i++) { const c = s[i]; if (c==="x") notes.push({s:b*spb+i, d}); else if (TAB_TO_ARTIC[c]) notes.push({s:b*spb+i, d, a:TAB_TO_ARTIC[c]}); }
     }
   }
-  return {id, title, desc, bpm, bars, beats, notes, builtin:true};
+  const s = {id, title, desc, bpm, bars, beats, notes, builtin:true}; if (sub !== 4) s.sub = sub; return s;
 }
 const Q = "x...x...x...x...", E8 = "x.x.x.x.x.x.x.x.";
 const LESSONS = [
@@ -31,6 +31,6 @@ const LESSONS = [
   pat("L15","15 · Flams and rimshots","Flams (FLAM) in the fill, a rimshot (RIM) on the backbeat.",70,2,{hihat:[E8,"x.x.x.x."],kick:["x.......x.......","x......."],snare:["....r.......r...","........f...f.f."],crash:["",""]}),
 ];
 let songs = store.get("songs", []);
-const allSongs = () => [...LESSONS, ...songs];
+const allSongs = () => [...LESSONS, ...(typeof RUDIMENTS !== "undefined" ? RUDIMENTS : []), ...(typeof BASIC_SONGS !== "undefined" ? BASIC_SONGS : []), ...songs];
 const findSong = id => allSongs().find(s=>s.id===id);
 

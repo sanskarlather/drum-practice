@@ -13,6 +13,7 @@ settings.ai = Object.assign({provider:"gemini", remember:true, method:"auto", ke
 settings.ai.keys = settings.ai.keys || {}; settings.ai.models = settings.ai.models || {}; settings.ai.loaded = settings.ai.loaded || {}; settings.ai.customs = settings.ai.customs || []; settings.ai.bases = settings.ai.bases || {};
 if (settings.ai.key) { settings.ai.keys.anthropic = settings.ai.key; settings.ai.provider = "anthropic"; delete settings.ai.key; } // from v0.3.0
 if (settings.ai.model) { settings.ai.models.anthropic = settings.ai.model; delete settings.ai.model; }
+settings.songOn = settings.songOn !== false; settings.songVol = settings.songVol ?? 80; // play-along with the song recording
 settings.artic = settings.artic !== false; // check how notes are played (open hi-hat, accents, ghost notes…)
 settings.vel = Object.assign({accent: 96, ghost: 55}, settings.vel || {});
 if (!settings.map) settings.map = JSON.parse(JSON.stringify(DEFAULT_MAP));

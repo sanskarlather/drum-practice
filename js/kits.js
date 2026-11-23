@@ -91,7 +91,7 @@ function kitChanged(){
   renderKitEditor();
   const kl = $("#keyList"); if (kl) kl.innerHTML = keyListHtml();
 }
-function resolveNotes(notes){ const out = [], seen = new Set(); for (const n of notes) { const d = resolveDrum(n.d); if (!d || seen.has(n.s+"|"+d)) continue; seen.add(n.s+"|"+d); out.push(n.a && articFits(n.a, d) ? { s:n.s, d, a:n.a } : { s:n.s, d }); } return out; }
+function resolveNotes(notes){ const out = [], seen = new Set(); for (const n of notes) { const d = resolveDrum(n.d); if (!d || seen.has(n.s+"|"+d)) continue; seen.add(n.s+"|"+d); const o = n.a && articFits(n.a, d) ? { s:n.s, d, a:n.a } : { s:n.s, d }; if (n.h) o.h = n.h; out.push(o); } return out; }
 function keyListHtml(){ return DRUMS.filter(d=>d.key).map(d=>`<span><kbd>${d.key===" "?"Space":d.key.toUpperCase()}</kbd> ${esc(d.name)}</span>`).join("") + `<span><kbd>Enter</kbd> Play / pause</span>`; }
 function addPiece(type){
   const kit = activeKit(), T = PIECE_TYPES[type], id = newPieceId(kit, type);

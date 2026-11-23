@@ -60,10 +60,14 @@ function parseMusicXML(text, name){
     const k = step+oct, x = head && /x|cross|circle-x/.test(head);
     return ({F4:"kick",E4:"kick",C5:"snare",E5:"tom1",D5:"tom2",B4:"tom2",A4:"floor",G4:"floor",F5: x?"ride":"tom1",G5:"hihat",A5:"crash",B5:"crash",D4:"hhp",C4:"hhp"})[k] || null;
   };
+  // Full scores: use every percussion part (some scores split snare, bass drum and cymbals into separate parts)
   const parts = [...doc.getElementsByTagName("part")];
-  const part = parts.find(p=>p.getElementsByTagName("unpitched").length) || parts[0];
-  if (!part) throw new Error("no parts found");
-  let divisions = 1, beats = 4, beatType = 4, tempo = null, mStart = 0, grace = false; const notes = []; const seen = new Set();
+  const percParts = parts.filter(p=>p.getElementsByTagName("unpitched").length);
+  const use = percParts.length ? percParts : parts.slice(0, 1);
+  if (!use.length) throw new Error("no parts found");
+  let divisions = 1, beats = 4, beatType = 4, tempo = null; const notes = []; const seen = new Set();
+  for (const part of use) {
+  let mStart = 0, grace = false;
   for (const m of part.children) {
     if (m.nodeName !== "measure") continue;
     let local = 0, lastStart = 0, maxLocal = 0;
@@ -102,6 +106,8 @@ function parseMusicXML(text, name){
     const full = beats * (4/beatType) * divisions;
     mStart += Math.max(full, maxLocal) || full;
   }
+  }
+  if (tempo == null) { const snd = [...doc.getElementsByTagName("sound")].find(x => x.getAttribute("tempo")); if (snd) tempo = +snd.getAttribute("tempo"); }
   const qPerBar = beats*(4/beatType); const bt = Math.round(qPerBar)===3 ? 3 : 4; const spb = bt*4;
   const maxS = notes.reduce((a,n)=>Math.max(a,n.s),0);
   return {id:uid(), title:name, bpm: Math.round(tempo||90), beats:bt, bars: Math.max(1, Math.min(64, Math.ceil((maxS+1)/spb))), notes};

@@ -37,12 +37,12 @@ function OnsetCore(fs, post){
       const ms = e/n, rms = Math.sqrt(ms);
       // a hit = loud enough AND a sudden jump over the last few milliseconds
       // (comparing with a short window lets a soft hi-hat right after a loud kick still count)
-      if (!col && rms > thresh && ms > 5*fast) col = {t, att:[0,0,0,0,0], dec:0, dur:0, peak:0};
+      if (!col && rms > thresh && ms > 5*fast) col = {t, att:[0,0,0,0,0], dec:0, decHi:0, dur:0, peak:0};
       fast = 0.6*fast + 0.4*ms;
       if (col) {
         col.dur += n/fs; col.peak = Math.max(col.peak, rms);
-        if (col.dur <= 0.032) for (let k=0;k<5;k++) col.att[k] += be[k]; else col.dec += e;
-        if (col.dur >= 0.09) { post({t:col.t, att:col.att, dec:col.dec, peak:col.peak}); col = null; }
+        if (col.dur <= 0.032) for (let k=0;k<5;k++) col.att[k] += be[k]; else { col.dec += e; col.decHi += be[4]; }
+        if (col.dur >= 0.09) { post({t:col.t, att:col.att, dec:col.dec, decHi:col.decHi, peak:col.peak}); col = null; }
       }
       lvlPeak = Math.max(lvlPeak, rms);
       if (++lvlN >= 12) { post({lvl:lvlPeak}); lvlPeak = 0; lvlN = 0; }

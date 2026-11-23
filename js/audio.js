@@ -29,6 +29,8 @@ function playDrum(id, t, vel=1, a=null){
   const v = Math.max(0.08, vel);
   const type = D[id] ? D[id].type : id;
   if (a==="flam") playDrum(id, t-0.028, vel*0.35);
+  if (a==="drag") { playDrum(id, t-0.07, vel*0.3); playDrum(id, t-0.035, vel*0.3); }
+  if (a==="buzz") { for (let k=1;k<7;k++) playDrum(id, t+k*0.018, vel*0.5*Math.pow(0.8,k)); }
   if (a==="open" && type==="hihat") { noise(t,0.45,0.32*v,"highpass",6500); return; }
   if (a==="rim" && type==="snare") { noise(t,0.22,0.7*v,"highpass",1500); tone(t,520,400,0.05,0.5*v,"square"); return; }
   if (a==="xstick" && type==="snare") { noise(t,0.05,0.45*v,"bandpass",1900,3); tone(t,950,800,0.04,0.35*v,"triangle"); return; }

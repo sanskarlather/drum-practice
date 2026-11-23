@@ -91,7 +91,7 @@ const TAB_CODES = { CR:"crash", CR2:"crash2", SP:"splash", CH:"china", RD:"ride"
   SD:"snare", T1:"tom1", T2:"tom2", T3:"tom3", FT:"floor", FT2:"floor2", BD:"kick", BD2:"kick2" };
 const AI_PROMPT = (page, pages) => `You are transcribing drum sheet music for a beginner's practice app.${pages > 1 ? ` This image is page ${page} of ${pages} of one piece.` : ""}
 
-Write every bar on this page, in playing order, as drum tab. Answer in EXACTLY this plain-text format and nothing else:
+Write every bar on this page, in playing order, as drum tab. If the page is a full score with several instruments, transcribe ONLY the drum kit part (the staff with the percussion clef, usually labelled Drums, Drum Set, Drum Kit or Batería); ignore all other instruments. If there is no drum part on this page, answer UNREADABLE: no drum part. Answer in EXACTLY this plain-text format and nothing else:
 
 TITLE: <title printed on the page, or blank>
 TEMPO: <tempo marking in BPM, or 0 if none>
@@ -367,6 +367,22 @@ function omrStaves(bin, W, H){
   }
   return staves.filter(s => s.x1 - s.x0 > 10*s.sp);
 }
+// Percussion clef: two thick vertical bars over the middle of the staff, near its left end.
+function omrPercClef(bin, W, H, st){
+  const { sp } = st, y0 = Math.round(st.top + sp*1.1), y1 = Math.round(st.bottom - sp*1.1), h = y1 - y0 + 1;
+  const cols = [];
+  for (let x = Math.max(0, Math.round(st.x0)); x <= Math.min(W-1, Math.round(st.x0 + 6*sp)); x++) {
+    let n = 0; for (let y = y0; y <= y1; y++) n += bin[y*W+x];
+    const above = bin[Math.round(st.top + sp*0.4)*W+x], below = bin[Math.round(st.bottom - sp*0.4)*W+x];
+    cols.push(n >= 0.92*h && !bin[Math.round(st.top - sp*0.6)*W+x] ? 1 : 0);
+  }
+  // runs of solid columns = bars; a percussion clef has two, each at least 0.2 sp wide, close together
+  const runs = []; let r = -1;
+  cols.forEach((v, i) => { if (v && r < 0) r = i; if ((!v || i === cols.length-1) && r >= 0) { runs.push([r, v ? i : i-1]); r = -1; } });
+  const thick = runs.filter(([a, b]) => b - a + 1 >= Math.max(2, 0.2*sp));
+  for (let i = 0; i + 1 < thick.length; i++) if (thick[i+1][0] - thick[i][1] <= 1.2*sp) return true;
+  return false;
+}
 // Erase staff and ledger lines but keep the symbols crossing them.
 function omrRemoveLines(bin, W, H, st){
   const { sp } = st, clear = (r0, r1, xa, xb) => {
@@ -527,8 +543,12 @@ function omrPage(canvas, beats){
   let { bin, W, H } = omrBinarize(c);
   const ang = omrSkew(bin, W, H);
   if (Math.abs(ang) >= 0.25) { c = omrRotate(c, ang); ({ bin, W, H } = omrBinarize(c)); }
-  const staves = omrStaves(bin, W, H);
-  const out = { staves: [], measures: [], canvas: c, angle: ang };
+  let staves = omrStaves(bin, W, H);
+  // Full scores: if some staves start with a percussion clef (two thick bars), keep only those
+  const perc = staves.filter(st => omrPercClef(bin, W, H, st));
+  const skipped = perc.length && perc.length < staves.length ? staves.length - perc.length : 0;
+  if (skipped) staves = perc;
+  const out = { staves: [], measures: [], canvas: c, angle: ang, skipped };
   staves.forEach((st, si) => {
     const sp = st.sp;
     const prevB = si ? staves[si-1].bottom : -1e9, nextT = si < staves.length-1 ? staves[si+1].top : 1e9;
@@ -577,10 +597,10 @@ function omrOverlay(page){
   return o;
 }
 function srOfflineRead(canvases, beats){
-  const notes = [], overlays = []; let bar = 0, heads = 0, staves = 0, errs = [];
+  const notes = [], overlays = []; let bar = 0, heads = 0, staves = 0, errs = [], skipped = 0;
   const spb = beats*4;
   for (const c of canvases) {
-    const pg = omrPage(c, beats); staves += pg.staves.length;
+    const pg = omrPage(c, beats); staves += pg.staves.length; skipped += pg.skipped || 0;
     for (const m of pg.measures) {
       m.cols.forEach((col, i) => { const s = bar*spb + m.steps[i]; for (const hd of col.heads) { heads++; if (!notes.some(n => n.s === s && n.d === hd.d)) notes.push({ s, d: hd.d }); } });
       if (m.err != null) errs.push(m.err);
@@ -590,7 +610,7 @@ function srOfflineRead(canvases, beats){
   }
   if (!staves) throw new Error("No 5-line drum staves were found. Use a straight, well-lit photo or a clean scan, or try the AI reader.");
   const avgErr = errs.length ? errs.reduce((a, b) => a+b, 0)/errs.length : 0;
-  const report = `Found ${staves} staff line${staves>1?"s":""}, ${bar} bar${bar>1?"s":""} and ${heads} notes.` + (avgErr > 0.2 ? " The rhythm was hard to work out in some bars: check the timing." : "");
+  const report = `Found ${staves} drum staff line${staves>1?"s":""}${skipped ? ` (skipped ${skipped} staves of other instruments)` : ""}, ${bar} bar${bar>1?"s":""} and ${heads} notes.` + (avgErr > 0.2 ? " The rhythm was hard to work out in some bars: check the timing." : "");
   return { title: "", bpm: 0, beats, bars: Math.max(1, bar), notes, report, overlays };
 }
 

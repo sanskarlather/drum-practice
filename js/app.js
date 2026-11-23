@@ -3,7 +3,8 @@
 function show(v){
   if (v!=="editor" && E.mode!=="practice") stop();
   if (v!=="practice" && E.mode==="practice") pause();
-  for (const s of ["practice","library","editor","setup"]) $("#view-"+s).hidden = s!==v;
+  for (const s of ["today","practice","library","editor","setup"]) $("#view-"+s).hidden = s!==v;
+  if (v==="today") renderToday();
   document.querySelectorAll("nav.main button").forEach(b=>{ if (b.dataset.view===v) b.setAttribute("aria-current","page"); else b.removeAttribute("aria-current"); });
   if (v==="editor" && !ED) openEditor({id:uid(), title:"My pattern", bpm:80, bars:2, beats:4, notes:[]});
   if (v==="practice" && E.mode==="practice") { if (!E.C) loadSong(findSong(settings.lastSong)||LESSONS[0]); else updateFrame(true); }
@@ -13,14 +14,14 @@ document.querySelectorAll("[data-view]").forEach(b=>b.addEventListener("click", 
 function togglePlay(){
   if (E.mode!=="practice") return;
   if (E.playing) { pause(); return; }
-  if (MIC.on && settings.metro && !MIC.warned) { MIC.warned = true; toast("Mic is on: use headphones for the click, or the mic will hear it"); }
+  if (MIC.on && (settings.metro || (settings.songOn && TRACK.info)) && !MIC.warned) { MIC.warned = true; toast("Mic is on: use headphones for the click and the song, or the mic will hear them"); }
   start();
 }
 $("#playBtn").onclick = togglePlay;
 $("#restartBtn").onclick = ()=>{ const was = E.playing; E.playing=false; E.pos=0; resetJudgements(); resetStats(); if (was) start(0); else { updateFrame(true); renderCount(0); $("#instr").textContent="Press play to start"; moveSheetHead(0); } };
 $("#tempo").oninput = e=>setTempo(+e.target.value);
 const bindOpt = (id, key, fn) => { const i=$(id); i.checked = settings[key]; i.onchange = ()=>{ settings[key]=i.checked; saveSettings(); fn&&fn(); }; };
-bindOpt("#optMetro","metro"); bindOpt("#optArtic","artic"); bindOpt("#optDemo","demo"); bindOpt("#optHitSnd","hitSnd"); bindOpt("#optLoop","loop",()=>updateFrame(true));
+bindOpt("#optMetro","metro"); bindOpt("#optSpeed","speed",()=>renderSpeed()); bindOpt("#optArtic","artic"); bindOpt("#optDemo","demo"); bindOpt("#optHitSnd","hitSnd"); bindOpt("#optLoop","loop",()=>updateFrame(true));
 bindOpt("#optWait","wait",()=>{ if (!settings.wait && E.blocked) { E.blocked=false; rebase(E.posBase); } });
 $("#optVol").value = settings.vol; $("#optVol").oninput = e=>{ settings.vol=+e.target.value; saveSettings(); if (master) master.gain.value = settings.vol/100; };
 document.querySelectorAll(".seg [data-v]").forEach(b=>b.onclick=()=>{ settings.view=b.dataset.v; saveSettings(); applyView(); });
@@ -45,10 +46,12 @@ drop.addEventListener("drop", e=>{ e.preventDefault(); drop.classList.remove("ov
 document.addEventListener("visibilitychange", ()=>{ if (document.hidden) pause(); });
 
 /* ---------- Init ---------- */
-buildKit(); renderMap(); micWire(); srWire(); kitWire(); edToolbar();
+buildKit(); applyLayout(); renderMap(); micWire(); srWire(); kitWire(); edToolbar(); trackWire(); arWire();
 $("#quickMic").onclick = ()=> MIC.on ? micStop() : micStart().then(ok=>{ if (!ok) { show("setup"); toast("Microphone couldn't start. See Kit setup."); } else if (!micTaught().length) toast("Listening. Teach it your drums in Kit setup for drum checking"); });
 updateInputPill(); renderLibrary(); applyView();
 loadSong(findSong(settings.lastSong) || LESSONS[0]);
+// open on Today once there is something to show there; a first visit starts on the first lesson
+if (Object.keys(P.days).length) show("today");
 // Ask for MIDI quietly on load where permission is already granted; otherwise wait for Connect.
 if (navigator.permissions && navigator.requestMIDIAccess) {
   navigator.permissions.query({name:"midi"}).then(p=>{ if (p.state==="granted") connectMidi(false); else setMidiPill("","Connect your e-kit"); }).catch(()=>connectMidi(false));

@@ -4,11 +4,12 @@ const E = {
   mode:"practice", // practice | preview | record
   C:null, bpm:70, playing:false, pos:0, posBase:0, clockBase:0, blocked:false,
   nextSched:0, stats:null, lastEv:-2, pass:0,
-  stepSec(){ return 60/this.bpm/4; },
+  stepSec(){ return 60/this.bpm/((this.C && this.C.sub) || 4); },
   windowSteps(ms){ return ms/1000/this.stepSec(); },
 };
-function resetStats(){ E.stats = {judged:0, good:0, perfect:0, miss:0, streak:0, best:0, offs:[], artRight:0, artWrong:0}; renderStats(); }
+function resetStats(){ E.stats = {judged:0, good:0, perfect:0, miss:0, streak:0, best:0, offs:[], artRight:0, artWrong:0, score:0, mult:1, hand:{R:{n:0,g:0},L:{n:0,g:0}}}; E.pass1 = newPass(); renderStats(); renderHud(); }
 function loadSong(song, keepTempo){
+  trackLoad(song);
   stop();
   E.C = compile(song);
   if (!keepTempo) E.bpm = song.bpm;
@@ -16,11 +17,12 @@ function loadSong(song, keepTempo){
   $("#songTitle").textContent = song.title;
   settings.lastSong = song.id; saveSettings();
   resetJudgements(); resetStats();
-  E.pos = 0; renderSheet(); renderCount(0); updateFrame(true);
+  E.cleanRun = 0; E.badRun = 0;
+  E.pos = 0; renderSheet(); renderCount(0); layoutSong(); updateFrame(true); renderRoutineNext();
   $("#instr").textContent = "Press play to start";
   $("#endOverlay").hidden = true;
 }
-function resetJudgements(){ E.C.notes.forEach(n=>n.j=null); }
+function resetJudgements(){ E.C.notes.forEach(n=>n.j=null); E.lastJ = {}; }
 function rebase(pos){ E.posBase = pos; E.clockBase = now(); E.pos = pos; }
 function curPos(){ return E.posBase + (now()-E.clockBase)/E.stepSec(); }
 function start(fromPos){
@@ -33,8 +35,8 @@ function start(fromPos){
   E.nextSched = Math.ceil(fromPos - 0.001);
   setPlayIcon(); requestAnimationFrame(loop);
 }
-function stop(){ E.playing=false; E.blocked=false; setPlayIcon(); if (E.mode!=="practice") { const m=E.mode; E.mode="practice"; editorStopped(m); } }
-function pause(){ if (!E.playing) return; E.pos = curPos(); E.playing=false; setPlayIcon(); }
+function stop(){ E.playing=false; E.blocked=false; setPlayIcon(); trackPause(); if (E.mode!=="practice") { const m=E.mode; E.mode="practice"; editorStopped(m); } }
+function pause(){ if (!E.playing) return; E.pos = curPos(); E.playing=false; setPlayIcon(); trackPause(); }
 function setPlayIcon(){
   const pb = $("#playBtn"); pb.setAttribute("aria-label", E.playing?"Pause":"Play");
   $("#playIcon").innerHTML = E.playing ? '<rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>' : '<path d="M7 4l13 8-13 8z"/>';
@@ -43,6 +45,14 @@ function setTempo(b){
   b = Math.max(30, Math.min(240, Math.round(b)));
   if (E.playing && !E.blocked) { const p = curPos(); E.bpm = b; rebase(p); } else E.bpm = b;
   $("#tempo").value = b; $("#tempoOut").textContent = b+" BPM";
+}
+// timing drills: "gap" = click only in odd-numbered bars (1, 3…); "24" = click only on beats 2 and 4
+function clickOn(C, s){
+  if (s < 0) return true;
+  const inBar = s % C.spb, beat = Math.floor(inBar / C.sub);
+  if (C.song.click === "gap") return Math.floor(s / C.spb) % 2 === 0;
+  if (C.song.click === "24") return beat % 2 === 1;
+  return true;
 }
 function blockEvent(){
   // first event with an unjudged note
@@ -66,7 +76,7 @@ function loop(){
   // misses
   if (E.mode==="practice" && !waitOn) {
     const w = E.windowSteps(160);
-    for (const n of C.notes) if (!n.j && pos - n.s > w && n.s >= 0) { n.j="miss"; E.stats.miss++; E.stats.streak=0; E.stats.judged++; floatText(n.d,"Miss","#A3A9B4"); renderStats(); setFb("Miss","#3A3F4A","#F2F2F0", D[n.d].name+" was missed"); }
+    for (const n of C.notes) if (!n.j && pos - n.s > w && n.s >= 0) { n.j="miss"; E.stats.miss++; E.stats.streak=0; E.stats.judged++; scoreHit("miss", n); floatText(n.d,"Miss","#A3A9B4"); renderStats(); setFb("Miss","#3A3F4A","#F2F2F0", D[n.d].name+" was missed"); }
   }
   // sound scheduling
   const ahead = 0.12/E.stepSec();
@@ -75,29 +85,53 @@ function loop(){
   const loopOn = E.mode==="practice" && settings.loop;
   while (E.nextSched < horizon && (E.nextSched < C.total || loopOn)) {
     const raw = E.nextSched, s = raw >= C.total ? raw - C.total : raw, t = now() + Math.max(0,(raw - pos))*E.stepSec();
-    const metro = settings.metro || s < 0 || E.mode==="record";
-    if (metro && ((s % 4)+4)%4===0 && E.mode!=="preview") click(t, ((s % C.spb)+C.spb)%C.spb===0);
+    const metro = (settings.metro && clickOn(C, s)) || s < 0 || E.mode==="record";
+    if (metro && ((s % C.sub)+C.sub)%C.sub===0 && E.mode!=="preview") click(t, ((s % C.spb)+C.spb)%C.spb===0 && C.song.click !== "24");
     if (s>=0 && (settings.demo || E.mode==="preview")) { const ei = C.stepMap.get(s); if (ei!=null) { const ev = C.events[ei]; ev.drums.forEach(d=>playDrum(d,t,0.85,ev.art[d])); } }
     E.nextSched++;
   }
   // end of song
   if (pos >= C.total) {
-    if (E.mode==="practice" && settings.loop) { E.pass++; resetJudgements(); rebase(pos - C.total); E.nextSched -= C.total; }
+    if (E.mode==="practice" && settings.loop) { wrapNow(pos); pos -= C.total; }
     else if (E.mode==="practice") { finish(); return; }
     else { stop(); return; }
   }
   updateFrame();
+  trackSync(E.pos);
   requestAnimationFrame(loop);
 }
+// Loop: start the next pass. Also called from judge() when a hit on beat 1 of the next pass
+// arrives a moment before the frame that would have wrapped.
+function wrapNow(pos){
+  const C = E.C; E.pass++; const r = passDone(false); if (r) passToast(r); resetJudgements();
+  rebase(pos - C.total); E.nextSched = Math.max(Math.ceil(E.pos - 0.001), E.nextSched - C.total);
+}
 function finish(){
-  E.playing=false; setPlayIcon(); E.pos = 0;
+  E.playing=false; setPlayIcon(); E.pos = 0; trackPause();
   const st = E.stats, acc = st.judged ? Math.round(100*st.good/st.judged) : 0;
-  const id = E.C.song.id; const prev = bests[id]||0; if (acc>prev) { bests[id]=acc; store.set("bests",bests); }
-  $("#endTitle").textContent = acc>=90 ? "Great job!" : acc>=70 ? "Nice work!" : "Keep going!";
-  const artTotal = (st.artRight||0) + (st.artWrong||0);
-  $("#endText").textContent = `On target: ${acc}% · Longest run: ${st.best} in a row · Best ever: ${Math.max(acc,prev)}%` + (artTotal ? ` · Accents, ghosts, open hi-hats etc. right: ${Math.round(100*(st.artRight||0)/artTotal)}%` : "") + (acc<70 ? ". Try it slower, or turn on Wait for me." : "");
+  const r = passDone(true);
+  const id = E.C.song.id, rec = P.songs[id] || {};
+  const stars = r ? r.stars : 0;
+  $("#endTitle").textContent = stars===3 ? "Superb!" : stars===2 ? "Great job!" : stars===1 ? "Nice work!" : "Keep going!";
+  document.querySelectorAll("#endStars svg").forEach((e,i)=>e.classList.toggle("on", i < stars));
+  $("#endScore").textContent = (st.score||0).toLocaleString(); $("#endAcc").textContent = acc+"%"; $("#endXp").textContent = "+"+(r ? r.xp : 0);
+  const artTotal = (st.artRight||0) + (st.artWrong||0), hd = st.hand || {R:{n:0},L:{n:0}};
+  const bits = [`Longest run: ${st.best} in a row`];
+  if (hd.R.n && hd.L.n) bits.push(`Right hand ${Math.round(100*hd.R.g/hd.R.n)}%, left hand ${Math.round(100*hd.L.g/hd.L.n)}%`);
+  if (artTotal) bits.push(`Accents, ghosts, open hi-hats etc. right: ${Math.round(100*(st.artRight||0)/artTotal)}%`);
+  if (r && r.newBest) bits.push("New personal best!"); else if (rec.best) bits.push(`Best ever: ${rec.best}%`);
+  if (r && r.fasterClean) bits.push(`Fastest clean tempo: ${E.bpm} BPM`);
+  if (!r) bits.push("Play along to get a score");
+  else if (r.waited) bits.push("With Wait for me on you can get 1 star. Turn it off for more");
+  else if (acc<70) bits.push("Try it slower, or turn on Wait for me");
+  $("#endText").textContent = bits.join(" · ");
   const li = LESSONS.findIndex(l=>l.id===id); $("#endNext").hidden = li<0 || li===LESSONS.length-1;
+  const nx = E.routine && routineNextItem(); $("#endRoutine").hidden = !nx; if (nx) $("#endRoutine").textContent = "Next: " + findSong(nx.id).title;
   $("#endOverlay").hidden = false; updateFrame(true); renderLibrary();
+}
+function passToast(r){
+  const st = "★".repeat(r.stars) + "☆".repeat(3 - r.stars);
+  toast(`Loop ${E.pass}: ${r.acc}% ${st} · +${r.xp} XP` + (r.newBest ? " · new best" : "") + (r.tempoMsg ? " · " + r.tempoMsg : ""));
 }
 
 /* -------- judging -------- */
@@ -116,30 +150,43 @@ function articProblem(n, info){
   }
   return null;
 }
+// flams and drags send their grace notes, and buzz strokes their bounces, as extra hits on the same pad
+const GRACE_MS = { flam: 70, drag: 110, buzz: 260 };
+function isGraceHit(drum, pos){
+  const g = E.lastJ && E.lastJ[drum]; if (!g || !GRACE_MS[g.a]) return false;
+  return (pos - g.pos) * E.stepSec() * 1000 < GRACE_MS[g.a] && pos >= g.pos - 0.01;
+}
 function judge(drum, pos, info){
   const C = E.C; const w = E.windowSteps(160);
+  if (E.mode==="practice" && settings.loop && !settings.wait && pos > C.total - w) {
+    const near = off => C.notes.filter(n => n.d===drum && (off || !n.j) && Math.abs(n.s + off - pos) <= w).reduce((m, n) => Math.min(m, Math.abs(n.s + off - pos)), 1e9);
+    if (near(C.total) < near(0)) { const lagged = curPos() - pos; wrapNow(curPos()); pos = E.pos - lagged; }
+  }
+  if (isGraceHit(drum, pos)) return;
+  const remember = n => { if (!E.lastJ) E.lastJ = {}; E.lastJ[drum] = { pos, a: n.a || null }; };
   let best=null, bd=1e9;
   for (const n of C.notes) { if (n.j || n.d!==drum) continue; const dd = Math.abs(n.s - pos); if (dd < bd) { bd=dd; best=n; } if (n.s > pos + w) break; }
   const st = E.stats;
   if (E.blocked && best && best.ev === blockEvent() && C.events[best.ev].s === E.posBase) {
     const prob = articProblem(best, info);
     if (prob) { floatText(drum, prob.short, "#FFB547"); setFb("Not quite", "#FFB547", "#0E0F12", prob.tip); return; } // wait until it's played right
-    best.j="ok"; st.judged++; st.good++; st.streak++; st.best=Math.max(st.best,st.streak);
+    best.j="ok"; remember(best); st.judged++; st.good++; st.streak++; st.best=Math.max(st.best,st.streak); scoreHit("wait", best);
     floatText(drum,"Got it!","#7BD389"); setFb("Got it!","#7BD389","#0E0F12", D[drum].name); renderStats(); return;
   }
   if (!best || bd > w) { floatText(drum,"Not yet","#8C929D"); return; }
   const ms = (pos - best.s)*E.stepSec()*1000;
   const a = Math.abs(ms);
-  best.j = a<=45 ? "perfect" : a<=100 ? "good" : "ok";
+  best.j = a<=45 ? "perfect" : a<=100 ? "good" : "ok"; remember(best);
   st.offs.push(ms); if (st.offs.length>12) st.offs.shift();
   const prob = best.j !== "ok" ? articProblem(best, info) : null;
   if (prob) {
-    best.j = "art"; st.judged++; st.streak = 0; st.artWrong = (st.artWrong||0) + 1;
+    best.j = "art"; st.judged++; st.streak = 0; st.artWrong = (st.artWrong||0) + 1; scoreHit("art", best);
     floatText(drum, prob.short, "#FFB547"); setFb("Right time, wrong touch", "#FFB547", "#0E0F12", prob.tip); renderStats(); return;
   }
   if (best.a && best.j !== "ok") st.artRight = (st.artRight||0) + 1;
   st.judged++; if (best.j!=="ok") { st.good++; st.streak++; } else st.streak = 0;
   st.best = Math.max(st.best, st.streak);
+  scoreHit(best.j, best);
   if (best.j==="perfect") { floatText(drum,"Perfect!","#7BD389"); setFb("Perfect!","#7BD389","#0E0F12", D[drum].name); }
   else if (best.j==="good") { floatText(drum, ms<0?"Good · early":"Good · late","#FFB547"); setFb("Good","#FFB547","#0E0F12", `${D[drum].name} · ${Math.round(a)} ms ${ms<0?"early":"late"}`); }
   else { floatText(drum, ms<0?"Too early":"Too late","#FF8A84"); setFb(ms<0?"Too early":"Too late","#3A3F4A","#F2F2F0", `${D[drum].name} · ${Math.round(a)} ms`); }
@@ -207,7 +254,7 @@ function updateFrame(force){
   // instruction
   if (E.mode==="practice") {
     const instr = $("#instr");
-    if (E.playing && pos < 0) { const n = Math.floor((pos + C.spb)/4)+1; instr.textContent = `Get ready… ${n}`; }
+    if (E.playing && pos < 0) { const n = Math.floor((pos + C.spb)/C.sub)+1; instr.textContent = `Get ready… ${n}`; }
     else if (E.playing && litSet.size) {
       const names = [...litSet].map(d=>{ const a = curEv && curEv.art[d]; return `<span style="color:${D[d].color}">${D[d].name}${a ? ` <span style="font-size:.7em;opacity:.9">(${ARTICS[a].label.toLowerCase().replace(" hi-hat","")})</span>` : ""}</span>`; });
       instr.innerHTML = "Hit " + (names.length>1 ? names.slice(0,-1).join(", ")+" + "+names[names.length-1]+" together" : "the "+names[0]);
@@ -220,14 +267,17 @@ function updateFrame(force){
     const key = cur+"|"+E.playing+"|"+E.pass;
     if (key !== lastUpKey || force) { lastUpKey = key; renderUpNext(E.playing ? cur : 0); }
     moveSheetHead(pos);
+    layoutFrame(pos, E.playing ? curEv : null, litSet);
   } else if (E.mode==="preview" || E.mode==="record") {
     edPlayhead(pos);
   }
 }
+// how to count each beat out loud, per grid: w = steps per syllable
+const COUNT_SYL = { 2:{w:1,l:["","&"]}, 3:{w:1,l:["","trip","let"]}, 4:{w:2,l:["","&"]}, 6:{w:2,l:["","trip","let"]}, 8:{w:2,l:["","e","&","a"]} };
 function renderCount(pos){
-  const C = E.C; const beats = C.spb/4; const c = $("#count");
-  if (c.children.length !== beats*2) { c.innerHTML = ""; for (let b=0;b<beats;b++){ c.appendChild(h("span",{},String(b+1))); c.appendChild(h("span",{},"&")); } }
-  const inBar = ((pos % C.spb)+C.spb)%C.spb; const idx = Math.floor(inBar/2);
+  const C = E.C; const cs = COUNT_SYL[C.sub] || COUNT_SYL[4], beats = C.spb/C.sub; const c = $("#count");
+  const key = C.sub+"|"+beats; if (c.dataset.k !== key) { c.dataset.k = key; c.innerHTML = ""; for (let b=0;b<beats;b++) cs.l.forEach((l,i)=>c.appendChild(h("span",{},i ? l : String(b+1)))); }
+  const inBar = ((pos % C.spb)+C.spb)%C.spb; const idx = Math.floor(inBar/cs.w);
   [...c.children].forEach((s,i)=>{ s.className = !E.playing ? "" : i===idx ? "now" : i<idx ? "past" : ""; });
 }
 function renderUpNext(cur){
@@ -241,7 +291,12 @@ function renderUpNext(cur){
     row.appendChild(h("span",{class:"when"}, k===0?"Now":k===1?"Next":"Then"));
     const chips = h("div",{style:"display:flex;gap:6px;flex-wrap:wrap"});
     ev.drums.forEach(d=>{ const c=D[d].color; chips.appendChild(h("span",{class:"chip",style: k===0?`background:${c};border-color:${c};color:#0E0F12`:`background:${c}22;border-color:${c}`}, `${esc(D[d].name)}${ev.art[d] ? " · "+esc(ARTICS[ev.art[d]].short.toLowerCase()) : ""} <small>${HAND_SHORT[ev.hands[d]]||""}</small>`)); });
-    row.appendChild(chips); box.appendChild(row);
+    row.appendChild(chips);
+    if (k < 2) { // coach layout: say how to play it
+      const how = ev.drums.filter(d => D[d].hand || D[d].foot).map(d => `${HAND_TXT[ev.hands[d]] || ""}${ev.art[d] ? ": " + ARTICS[ev.art[d]].tip.toLowerCase() : ""}`).filter(Boolean);
+      row.appendChild(h("div",{class:"how"}, esc(how.join(" · "))));
+    }
+    box.appendChild(row);
   }
 }
 

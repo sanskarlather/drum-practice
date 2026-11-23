@@ -34,7 +34,8 @@ Order matters only for code that runs at load time (later files may call functio
 |---|---|
 | `data.js` | `PIECE_TYPES` (how each kind of piece is drawn, notated and grouped), piece ids and names, `FALLBACK` between pieces, `DEFAULT_MAP` (Alesis Nitro Mesh + General MIDI notes), `GM` for importers. `DRUMS`/`D` hold the active kit. |
 | `storage.js` | `store` (localStorage with an in-memory fallback), `settings`, `bests`. |
-| `lessons.js` | `pat()` builds a lesson from text rows such as `"x...x...x...x..."`; `LESSONS`; the user's `songs`. |
+| `lessons.js` | `pat()` builds a lesson from text rows such as `"x...x...x...x..."`; `LESSONS`; the user's `songs`; `allSongs()` / `findSong()`. |
+| `rudiments.js` | `RUDIMENTS` (40) and `BASIC_SONGS` (22), written as sticking strings (`"R> L R R L> R L L"`, `fR` flam, `dR` drag, `zR` buzz, `r`/`l` ghost, `K` kick, `H` hi-hat pedal, `@tom1` another piece) and turned into songs with explicit hands by `stkSong()`. |
 | `util.js` | `$`, `el` (SVG), `h` (HTML), `esc`, `toast`, `uid`. |
 | `kits.js` | Kits and presets, `applyKit()` (fills `DRUMS`/`D`), `resolveDrum()`, adding/removing/dragging pieces, the kit editor. |
 | `audio.js` | Lazily creates the `AudioContext`; synthesised drum sounds `playDrum()` and `click()`. |
@@ -46,8 +47,13 @@ Order matters only for code that runs at load time (later files may call functio
 | `mic.js` | Microphone hit detection, drum teaching, delay measurement, `judgeOnset()`. |
 | `importers.js` | `parseMidi()` and `parseMusicXML()`. |
 | `library.js` | Library lists, imports, saving songs. |
+| `track.js` | Play-along: recordings in IndexedDB (`drumapp` / `audio`), an `<audio>` element kept in sync with the engine clock (seek if > 0.15 s off, otherwise nudge the rate ±4 %), `preservesPitch`. |
+| `audioreader.js` | Recording → notes: decode, mono, 16 kHz WAV for AI listening (Gemini `inlineData`, OpenAI-style `input_audio`); offline onset detection, 5-band classification (closed/open hi-hat by high-band ring), tempo/phase grid fit and bar-1 choice. |
 | `sheetreader.js` | PDF/photo → pages (PDF.js), the AI reader, the offline reader, the reading dialog and API key settings. |
 | `editor.js` | Note grid, record from kit, listen, sheet tracing. |
+| `progress.js` | `P` (saved as `drumapp.progress`): per-song records, per-day minutes/XP/items, XP and levels, streak, badges, the daily routine, `scoreHit()` per judged note, `passDone()` per loop, the speed builder. |
+| `layout.js` | Arena / Coach / Hands layouts (classes on the practice section), the score HUD, the beat lane (canvas), the sticking row and hand pads, the speed-builder ladder. `layoutFrame()` is called from `updateFrame()`. |
+| `today.js` | The Today screen and the rudiment/basics lists in the library. |
 | `app.js` | Navigation between screens, control wiring, start-up. |
 
 ## Data formats
@@ -61,14 +67,18 @@ Order matters only for code that runs at load time (later files may call functio
   bpm: 80,
   bars: 2,
   beats: 4,                 // beats per bar: 4 (4/4) or 3 (3/4)
-  notes: [ { s: 0, d: "kick" }, { s: 0, d: "hihat", a: "open" }, { s: 4, d: "snare", a: "accent" } ],
+  sub: 4,                   // optional: steps per beat. 4 = 16ths (default), 2 = 8ths, 3 = 8th triplets, 6 = 16th triplets, 8 = 32nds
+  click: "gap",             // optional timing drill: "gap" = click only in bars 1, 3…; "24" = click only on beats 2 and 4
+  sticking: true,           // optional: print R/L under the notes (rudiments, basics)
+  notes: [ { s: 0, d: "kick" }, { s: 0, d: "hihat", a: "open" }, { s: 4, d: "snare", a: "accent", h: "L" } ],
   source: "MIDI file",      // optional, shown in the library
   builtin: false
 }
 ```
 
-- `s` is the position in **16th-note steps** from the start (a 4/4 bar has 16 steps).
-- `a` (optional) is the articulation: `accent`, `ghost`, `open`, `rim`, `xstick`, `bell`, `flam` or `choke` (see `artic.js`). Absent = a normal hit.
+- `s` is the position in **grid steps** from the start: `beats × sub` steps per bar (16 for 4/4 in 16ths, 12 for 4/4 in triplets). The engine's step length is `60 / bpm / sub`.
+- `h` (optional) fixes the hand, `"R"` or `"L"`; otherwise `compile()` assigns hands (cymbal right, drum left, alternating single drums).
+- `a` (optional) is the articulation: `accent`, `ghost`, `open`, `rim`, `xstick`, `bell`, `flam`, `drag`, `buzz` or `choke` (see `artic.js`). Absent = a normal hit.
 - `d` is a piece id: `crash`, `ride`, `hihat`, `tom1`, `tom2`, `snare`, `floor`, `kick`, `hhp` (hi-hat pedal), plus extra pieces such as `tom3`, `floor2`, `crash2`, `splash`, `china`, `ride2`, `kick2`. Ids not in the active kit are mapped with `resolveDrum()`.
 
 ### Kit (saved as `drumapp.kits`)
@@ -119,6 +129,9 @@ pos = posBase + (audioTime - clockBase) / stepSeconds
 - Find the nearest unjudged note **of that drum** within ±160 ms.
 - Grade by distance: ≤45 ms *perfect*, ≤100 ms *good*, else *ok* (shown as too early/late, and breaks the streak).
 - Notes more than 160 ms in the past with no hit become *miss* (not in wait mode).
+- After a flam (70 ms), drag (110 ms) or buzz stroke (260 ms), further hits on the same pad are taken as its grace notes or bounces and ignored (`isGraceHit`).
+- With Loop on, a hit that belongs to beat 1 of the next pass but arrives just before the frame that wraps starts the next pass at once (`wrapNow`), so it isn't judged against the previous pass's last note.
+- Every judged note calls `scoreHit(kind, note)` (points, combo, per-hand counts); each wrap and the end of the song call `passDone()` (stars, records, XP, speed builder, routine).
 
 Microphone hits go through `judgeOnset()` instead (see below), because a microphone hears one combined sound for simultaneous drums.
 
@@ -229,7 +242,7 @@ An overlay image shows what was found. Measured on sheets drawn by the app: 198/
 
 ## Storage
 
-`localStorage` keys: `drumapp.settings`, `drumapp.songs`, `drumapp.bests`. If storage is unavailable (private mode, blocked), the app keeps working in memory for the session.
+`localStorage` keys: `drumapp.settings`, `drumapp.songs`, `drumapp.bests`, `drumapp.kits`, `drumapp.progress`. Song recordings are in IndexedDB (`drumapp`, store `audio`). If storage is unavailable (private mode, blocked), the app keeps working in memory for the session.
 
 ## Offline support
 

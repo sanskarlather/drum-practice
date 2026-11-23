@@ -14,6 +14,8 @@ const ARTICS = {
   xstick: { label:"Cross-stick", short:"X-STICK", tab:"c", sign:"X",  tip:"Lay the stick across and click it on the rim", types:["snare"], variant:true },
   bell:   { label:"Ride bell",   short:"BELL",    tab:"b", sign:"◇",  tip:"Hit the raised bell in the middle of the ride", types:["ride"], variant:true },
   flam:   { label:"Flam",        short:"FLAM",    tab:"f", sign:"f",  tip:"A soft grace note with the other hand just before the main hit", types:["snare","tom","floor"] },
+  drag:   { label:"Drag",        short:"DRAG",    tab:"d", sign:"d",  tip:"Two quick soft grace notes with the other hand, then the main hit", types:["snare","tom","floor"] },
+  buzz:   { label:"Buzz stroke", short:"BUZZ",    tab:"z", sign:"z",  tip:"Press the stick into the head so it bounces many times", types:["snare","tom","floor"] },
   choke:  { label:"Choke",       short:"CHOKE",   tab:"k", sign:"+",  tip:"Grab the cymbal right after hitting it to stop the sound", types:["crash","splash","china"] },
 };
 const TAB_TO_ARTIC = Object.fromEntries(Object.entries(ARTICS).map(([k, v]) => [v.tab, k]));

@@ -9,23 +9,24 @@ function openEditor(s){
   ED = JSON.parse(JSON.stringify(s));
   ED.notes = resolveNotes(ED.notes || []);
   if (s.builtin) { ED.id = uid(); ED.title = s.title.replace(/^\d+\s·\s/,"") + " (my copy)"; ED.builtin=false; ED.source="Edited lesson"; }
-  ED.beats = ED.beats||4;
-  $("#edTitle").value = ED.title; $("#edBpm").value = ED.bpm; $("#edBars").value = ED.bars; $("#edBeats").value = ED.beats;
-  renderGrid(); show("editor");
+  ED.beats = ED.beats||4; ED.sub = ED.sub||4;
+  $("#edTitle").value = ED.title; $("#edBpm").value = ED.bpm; $("#edBars").value = ED.bars; $("#edBeats").value = ED.beats; $("#edSub").value = ED.sub;
+  renderGrid(); edAudioUI(); show("editor");
 }
-function edSpb(){ return ED.beats*4; }
+function edSpb(){ return ED.beats*(ED.sub||4); }
 function renderGrid(){
   const g = $("#grid"); const spb = edSpb(), total = ED.bars*spb;
   g.style.gridTemplateColumns = `112px repeat(${total}, minmax(26px, 1fr))`; g.innerHTML = "";
   g.appendChild(h("div",{class:"rh",style:"border-top:0"},""));
-  for (let s=0;s<total;s++){ const i=s%spb; const lab = i%4===0 ? (i===0?`${Math.floor(s/spb)+1}.1`:String(i/4+1)) : i%4===2 ? "&" : "·"; g.appendChild(h("div",{class:"hd"+(i%4===0?" b":"")+(i===0?" bar":"")},lab)); }
+  const sub = ED.sub||4, cs = COUNT_SYL[sub] || COUNT_SYL[4];
+  for (let s=0;s<total;s++){ const i=s%spb, k=i%sub; const lab = k===0 ? (i===0?`${Math.floor(s/spb)+1}.1`:String(i/sub+1)) : k%cs.w===0 ? cs.l[k/cs.w] : "·"; g.appendChild(h("div",{class:"hd"+(k===0?" b":"")+(i===0?" bar":"")},lab)); }
   const on = new Map(ED.notes.map(n=>[n.s+"|"+n.d, n.a || ""]));
   for (const d of edRows()){
     const dd = D[d];
     g.appendChild(h("div",{class:"rh"},`<i style="background:${dd.color}"></i>${esc(dd.name)}`));
     for (let s=0;s<total;s++){
       const i = s%spb, k = s+"|"+d, a = on.get(k) || "";
-      const cls = "c" + (Math.floor(i/4)%2?" alt":"") + (i===0?" barl":i%4===0?" beat":"") + (on.has(k)?" on":"");
+      const cls = "c" + (Math.floor(i/sub)%2?" alt":"") + (i===0?" barl":i%sub===0?" beat":"") + (on.has(k)?" on":"");
       const b = h("button",{class:cls,type:"button","data-s":s,"data-d":d,"data-a":a,"data-art":a ? ARTICS[a].sign : "",style:`--col:${dd.color}`,"aria-label":`${dd.name}, bar ${Math.floor(s/spb)+1}, step ${i+1}${a ? ", "+ARTICS[a].label : ""}`,"aria-pressed":on.has(k)});
       g.appendChild(b);
     }
@@ -68,18 +69,24 @@ window.addEventListener("pointerup", ()=>paint=null);
 function readEdFields(){
   ED.title = $("#edTitle").value.trim() || "Untitled";
   ED.bpm = Math.max(30, Math.min(240, +$("#edBpm").value || 80));
-  const bars = Math.max(1, Math.min(32, +$("#edBars").value || 1)), beats = +$("#edBeats").value;
-  if (bars !== ED.bars || beats !== ED.beats) {
-    const oldSpb = edSpb(), newSpb = beats*4;
-    ED.notes = ED.notes.filter(n=>n.s%oldSpb < newSpb).map(n=>Object.assign({}, n, {s: Math.floor(n.s/oldSpb)*newSpb + n.s%oldSpb}));
-    ED.bars = bars; ED.beats = beats; ED.notes = ED.notes.filter(n=>n.s < bars*beats*4); renderGrid();
+  const bars = Math.max(1, Math.min(32, +$("#edBars").value || 1)), beats = +$("#edBeats").value, sub = +$("#edSub").value || 4;
+  if (bars !== ED.bars || beats !== ED.beats || sub !== (ED.sub||4)) {
+    const oldSub = ED.sub||4, oldSpb = edSpb(), newSpb = beats*sub;
+    // keep each note at the same moment in its bar; on a coarser grid it moves to the nearest step
+    const seen = new Set(), out = [];
+    for (const n of ED.notes) {
+      const bar = Math.floor(n.s/oldSpb), inBar = Math.round((n.s%oldSpb) * sub / oldSub);
+      if (inBar >= newSpb) continue; const s = bar*newSpb + inBar, k = s+"|"+n.d; if (seen.has(k)) continue; seen.add(k);
+      out.push(Object.assign({}, n, {s}));
+    }
+    ED.bars = bars; ED.beats = beats; ED.sub = sub; ED.notes = out.filter(n=>n.s < bars*newSpb); renderGrid();
   }
 }
-["#edBars","#edBeats","#edBpm","#edTitle"].forEach(s=>$(s).addEventListener("change", readEdFields));
+["#edBars","#edBeats","#edSub","#edBpm","#edTitle"].forEach(s=>$(s).addEventListener("change", readEdFields));
 $("#edClear").onclick = ()=>{ if (!ED.notes.length) return; if (confirmDelete({id:"clear:"+ED.id,title:"all notes"})) { ED.notes=[]; renderGrid(); } };
 $("#edSave").onclick = ()=>{ readEdFields(); saveSong(JSON.parse(JSON.stringify(ED))); toast("Saved to My songs"); };
 $("#edPractise").onclick = ()=>{ readEdFields(); const s = JSON.parse(JSON.stringify(ED)); saveSong(s); loadSong(s); show("practice"); };
-$("#edPlay").onclick = ()=>{ if (E.mode==="preview" && E.playing) { stop(); return; } readEdFields(); stop(); E.mode="preview"; E.C = compile(ED); E.bpm = ED.bpm; start(0); $("#edPlay").textContent="Stop"; };
+$("#edPlay").onclick = async ()=>{ if (E.mode==="preview" && E.playing) { stop(); return; } readEdFields(); stop(); await trackLoad(ED); E.mode="preview"; E.C = compile(ED); E.bpm = ED.bpm; start(0); $("#edPlay").textContent="Stop"; };
 $("#edRec").onclick = ()=>{ if (E.mode==="record" && E.playing) { stop(); return; } readEdFields(); stop(); E.mode="record"; E.C = compile(ED); E.bpm = ED.bpm; start(0); $("#edRec").querySelector("span").textContent="Stop recording"; toast("Count-in: 4 clicks, then play"); };
 // Recording keeps how you played: open hi-hat / rimshot / bell from the pad, accents and ghost notes from how hard you hit.
 function recordHit(d, pos, info){
@@ -104,7 +111,7 @@ function editorStopped(m){
   $("#edPlay").textContent = "Listen"; $("#edRec").querySelector("span").textContent = "Record from kit";
   document.querySelectorAll("#grid .c.play").forEach(c=>c.classList.remove("play")); edHeadCol=-1;
   if (m==="record") toast(`Recorded. ${ED.notes.length} notes on the grid`);
-  const s = findSong(settings.lastSong) || LESSONS[0]; E.C = compile(s); E.bpm = +$("#tempo").value || s.bpm; resetJudgements(); E.pos = 0;
+  const s = findSong(settings.lastSong) || LESSONS[0]; E.C = compile(s); E.bpm = +$("#tempo").value || s.bpm; resetJudgements(); E.pos = 0; trackLoad(s);
 }
 // Shows the sheet above the grid. PDFs are drawn as page images (works on phones and offline too).
 let traceFile = null;

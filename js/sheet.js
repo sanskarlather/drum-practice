@@ -26,6 +26,8 @@ function renderSheet(){
     if (a === "rim") el("line",{x1:x-9,y1:y+6,x2:x+9,y2:y-6,stroke:col,"stroke-width":1.6},svg);                                        // slashed head
     if (a === "flam") { el("ellipse",{cx:x-12,cy:y-1,rx:3.4,ry:2.6,fill:col,transform:`rotate(-20 ${x-12} ${y-1})`},svg); el("line",{x1:x-9,y1:y-2,x2:x-9,y2:y-15,stroke:col,"stroke-width":1},svg); el("line",{x1:x-13,y1:y-6,x2:x-5,y2:y-13,stroke:col,"stroke-width":1},svg); }
     if (a === "choke") txt(x+13, y+4, "+", 13);
+    if (a === "drag") for (const dx of [-20, -13]) { el("ellipse",{cx:x+dx,cy:y-1,rx:3,ry:2.3,fill:col,transform:`rotate(-20 ${x+dx} ${y-1})`},svg); el("line",{x1:x+dx+3,y1:y-2,x2:x+dx+3,y2:y-14,stroke:col,"stroke-width":1},svg); }
+    if (a === "buzz") txt(x+5, y-18, "z", 13);
     if (a === "accent" || a === "open") { const k = s+"|"+isUp; if (!marks.has(k)) marks.set(k, []); marks.get(k).push(a === "accent" ? ">" : "o"); }
   };
   const beams = (map, isUp) => {
@@ -36,19 +38,30 @@ function renderSheet(){
       const tip = isUp ? 6 : 128, root = isUp ? Math.max(...ys) : Math.min(...ys);
       const stx = isUp ? x+5 : x-5;
       el("line",{x1:stx,x2:stx,y1:root,y2:tip,stroke:"#F2F2F0","stroke-width":1.5},svg);
-      const g = Math.floor(s/4); if(!groups.has(g)) groups.set(g,[]); groups.get(g).push({s,x:stx});
+      const g = Math.floor(s/C.sub); if(!groups.has(g)) groups.set(g,[]); groups.get(g).push({s,x:stx});
     }
     for (const [, arr] of groups) {
-      arr.sort((a,b)=>a.s-b.s); const tip = isUp?6:128, tip2 = isUp?12:122;
-      if (arr.length>1) {
-        el("line",{x1:arr[0].x,x2:arr[arr.length-1].x,y1:tip,y2:tip,stroke:"#F2F2F0","stroke-width":4},svg);
-        for (let i=0;i<arr.length;i++){ const a=arr[i]; if (a.s%2===1) { const nb = arr[i+1] && arr[i+1].s===a.s+1 ? arr[i+1] : arr[i-1] && arr[i-1].s===a.s-1 ? arr[i-1] : null; const x2 = nb ? nb.x : a.x + (i? -8 : 8); el("line",{x1:a.x,x2:x2,y1:tip2,y2:tip2,stroke:"#F2F2F0","stroke-width":4},svg); } }
-      } else if (arr[0].s % 4 !== 0 || (arr[0].s%2===1)) {
-        const a = arr[0]; el("path",{d: isUp?`M${a.x} ${tip} q10 8 8 20`:`M${a.x} ${tip} q10 -8 8 -20`,fill:"none",stroke:"#F2F2F0","stroke-width":2},svg);
+      arr.sort((a,b)=>a.s-b.s); const tip = isUp?6:128, tip2 = isUp?12:122, tip3 = isUp?18:116, sub = C.sub;
+      const line = (x1, x2, y) => el("line",{x1,x2,y1:y,y2:y,stroke:"#F2F2F0","stroke-width":4},svg);
+      if (sub === 4) {
+        if (arr.length>1) {
+          line(arr[0].x, arr[arr.length-1].x, tip);
+          for (let i=0;i<arr.length;i++){ const a=arr[i]; if (a.s%2===1) { const nb = arr[i+1] && arr[i+1].s===a.s+1 ? arr[i+1] : arr[i-1] && arr[i-1].s===a.s-1 ? arr[i-1] : null; line(a.x, nb ? nb.x : a.x + (i? -8 : 8), tip2); } }
+        } else if (arr[0].s % 4 !== 0) {
+          const a = arr[0]; el("path",{d: isUp?`M${a.x} ${tip} q10 8 8 20`:`M${a.x} ${tip} q10 -8 8 -20`,fill:"none",stroke:"#F2F2F0","stroke-width":2},svg);
+        }
+      } else {
+        // triplets (3, 6) and 32nds (8): how many beams the finest note in the beat needs
+        const ks = arr.map(a => a.s % sub);
+        const lv = sub <= 3 ? 1 : sub === 6 ? (ks.some(k => k % 2) ? 2 : 1) : (ks.some(k => k % 2) ? 3 : ks.some(k => k % 4) ? 2 : 1);
+        if (arr.length > 1) { line(arr[0].x, arr[arr.length-1].x, tip); if (lv > 1) line(arr[0].x, arr[arr.length-1].x, tip2); if (lv > 2) line(arr[0].x, arr[arr.length-1].x, tip3); }
+        else if (ks[0] !== 0 || sub === 2) { const a = arr[0]; for (let l = 0; l < lv; l++) el("path",{d: isUp?`M${a.x} ${tip+l*7} q10 8 8 20`:`M${a.x} ${tip-l*7} q10 -8 8 -20`,fill:"none",stroke:"#F2F2F0","stroke-width":2},svg); }
+        if ((sub === 3 || sub === 6) && isUp && arr.length > 1) txt((arr[0].x + arr[arr.length-1].x)/2, -12, sub === 3 ? "3" : "6", 11);
       }
     }
   };
   beams(up,true); beams(down,false);
+  if (C.song.sticking) for (const ev of C.events) for (const d of ev.drums) { const hd = ev.hands[d]; if (hd === "R" || hd === "L") { const e = txt(sx(ev.s, C.spb), 112, hd, 14); e.setAttribute("fill", hd === "R" ? "#4CC9F0" : "#FFB547"); } }
   for (const [k, signs] of marks) { const [s, isUp] = k.split("|"); const x = sx(+s, C.spb) + (isUp === "true" ? 5 : -5);
     [...new Set(signs)].forEach((g, i) => txt(x, isUp === "true" ? -4 - i*12 : 146 + i*12, g, g === ">" ? 14 : 12)); }
   sheetHead = el("line",{x1:0,x2:0,y1:-16,y2:150,stroke:"#FFB547","stroke-width":2.5},svg);

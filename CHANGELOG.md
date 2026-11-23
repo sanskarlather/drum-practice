@@ -2,6 +2,26 @@
 
 All notable changes to this project. Dates are YYYY-MM-DD.
 
+## [0.6.0] - 2026-11-23
+### Added
+- **Rudiments:** all 40 international drum rudiments in the library, grouped into six families, with sticking (R/L under the notes and on the kit), accents, flams, drags and buzz strokes.
+- **Daily basics:** 22 everyday exercises for time, counting, hands, feet and coordination, including timing drills where the click drops out or plays only on 2 and 4.
+- **Today screen** with a daily **routine** (warm-up basics, a new rudiment, a review, a groove, your song), minutes against a daily goal, day streak, XP and levels, a week chart, 18 badges and your fastest clean tempos. The app opens on Today once you've practised.
+- **Scoring:** points per hit with a combo multiplier up to ×4, 1-3 stars per pass, right- and left-hand accuracy, personal bests, and a richer end screen.
+- **Speed builder:** +5 BPM after two clean loops, up to each pattern's goal tempo; -5 BPM when struggling; remembers your fastest clean tempo.
+- **Three play-screen layouts:** Arena (score HUD and beat lane), Coach (big Now/Next cards with how-to), Hands (sticking row, hand pads, per-hand scores, speed ladder). A **full-screen kit on a phone held sideways**.
+- Grids other than 16ths: 8ths, 8th-note triplets, 16th-note triplets and 32nds, in songs, the sheet (beams and tuplet numbers), the counter (*1 trip let*) and the note editor (**Grid**).
+- Drag and buzz-stroke articulations; songs can set the hand for each note.
+### Fixed
+- With Loop on, a hit on beat 1 that arrived a moment before the screen wrapped round was judged against the last note of the previous loop.
+- Flam grace notes from an e-kit could count as an extra early hit and use up the next note.
+
+## [0.5.0] - 2026-11-23
+### Added
+- **Drum notes from a song recording:** AI listening (Google Gemini or another audio-capable service, your own key) for full songs, or the free offline reader for drums-only recordings (tempo, bar 1, kick, snare, toms, closed and open hi-hat, crash).
+- **Play along with the recording:** kept in sync with the practice clock, follows the tempo slider with pitch kept, pauses and waits with you. Recordings are kept in the browser (IndexedDB); a recording can be added to any song in the editor, with bar-1 offset and tempo.
+- **Full scores:** PDF/photo sheet reading and MusicXML import take only the drum part from scores with every instrument.
+
 ## [0.4.2] - 2026-11-23
 ### Fixed
 - After an update, browsers could keep showing the previous version for a while. Files now carry a version number, the offline copy always checks GitHub for newer files, and the app reloads itself once when a new version is installed.

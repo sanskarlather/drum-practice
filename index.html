@@ -11,24 +11,57 @@
 <title>Drum Practice</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@500;700&display=swap">
-<link rel="stylesheet" href="css/styles.css?v=0.4.2">
+<link rel="stylesheet" href="css/styles.css?v=0.6.0">
 </head>
 <body>
 <header class="top">
   <div style="display:flex;align-items:center;gap:20px;flex-wrap:wrap;min-width:0">
     <div class="brand"><span class="dot" aria-hidden="true"></span>Drum Practice</div>
     <nav class="main" aria-label="Main">
+      <button data-view="today">Today</button>
       <button data-view="practice" aria-current="page">Practice</button>
       <button data-view="library">Library</button>
       <button data-view="editor">Note editor</button>
       <button data-view="setup">Kit setup</button>
     </nav>
   </div>
-  <span class="muted" id="appVersion" style="font-size:12px;font-family:var(--mono)" title="App version">v0.4.2</span>
+  <span class="muted" id="appVersion" style="font-size:12px;font-family:var(--mono)" title="App version">v0.6.0</span>
   <button class="pill" id="midiPill" data-view="setup" type="button"><span class="led"></span><span id="midiText">Connect your e-kit</span></button>
 </header>
 
 <main>
+<!-- TODAY -->
+<section id="view-today" hidden aria-label="Today">
+  <div class="today">
+    <div class="t-top">
+      <div><h1 style="font-size:30px;margin:0 0 4px">Today's practice</h1><p class="muted" style="margin:0" id="tDate"></p></div>
+      <div class="t-chips">
+        <div class="t-chip"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2c1 4 5 6 5 11a5 5 0 0 1-10 0c0-3 2-4 2-7 2 1 3 3 3 5 1-1 1-3 0-9z"/></svg><div><b id="tStreak">0</b><span>day streak</span></div></div>
+        <div class="t-chip"><div><b id="tMin">0</b><span id="tMinOf">of 15 min today</span></div></div>
+        <div class="t-chip lvl"><div style="flex:1"><b id="tLevel">Level 1</b><span id="tLevelTitle">First sticks</span><div class="xpbar"><i id="tXpBar"></i></div><span id="tXp" style="font-size:12px"></span></div></div>
+      </div>
+    </div>
+    <div class="t-grid">
+      <div class="card t-routine">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+          <div><h2 style="font-size:20px;margin:0 0 4px">Your routine</h2><p class="muted" style="margin:0;font-size:14px">A new plan every day: warm-up basics, a rudiment to learn, one to review, a groove and your song. Each one is done after two passes at 70% or more.</p></div>
+          <button class="btn primary" type="button" id="tStart">Start routine</button>
+        </div>
+        <div id="tRoutine" class="t-items"></div>
+      </div>
+      <div class="t-side">
+        <div class="card"><div class="eyebrow" style="margin-bottom:10px">This week</div><div class="week" id="tWeek"></div><p class="muted" id="tTotal" style="font-size:12px;margin:8px 0 0"></p></div>
+        <div class="card"><div class="eyebrow" style="margin-bottom:10px">Settings</div>
+          <label style="display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--muted)">Daily goal
+            <select id="tGoal"><option value="5">5 minutes</option><option value="10">10 minutes</option><option value="15">15 minutes</option><option value="20">20 minutes</option><option value="30">30 minutes</option><option value="45">45 minutes</option><option value="60">1 hour</option></select></label>
+        </div>
+      </div>
+    </div>
+    <div class="card"><div class="eyebrow" style="margin-bottom:10px">Badges</div><div class="badges" id="tBadges"></div></div>
+    <div class="card"><div class="eyebrow" style="margin-bottom:10px">Fastest clean tempos</div><div id="tRecords" class="records"></div></div>
+  </div>
+</section>
+
 <!-- PRACTICE -->
 <section id="view-practice" aria-label="Practice">
   <div class="p-head">
@@ -37,18 +70,36 @@
       <h1 id="instr" aria-live="polite">Press play to start</h1>
     </div>
     <div class="count" id="count" aria-hidden="true"></div>
+    <div class="hud" id="hud" aria-label="Score">
+      <div class="h-score"><span class="lab">Score</span><b id="hudScore">0</b></div>
+      <div class="h-mult" id="hudMultBox"><b id="hudMult">×1</b><span id="hudCombo">combo 0</span></div>
+      <div class="h-stars" id="hudStars" aria-label="0 stars so far"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2l3 7 7 .6-5.3 4.7 1.7 7.2L12 17.8 5.6 21.5l1.7-7.2L2 9.6 9 9z"/></svg><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2l3 7 7 .6-5.3 4.7 1.7 7.2L12 17.8 5.6 21.5l1.7-7.2L2 9.6 9 9z"/></svg><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2l3 7 7 .6-5.3 4.7 1.7 7.2L12 17.8 5.6 21.5l1.7-7.2L2 9.6 9 9z"/></svg></div>
+      <div class="h-acc"><span class="lab">On target</span><b id="hudAcc">–</b></div>
+      <div class="h-hands"><span class="lab">Right / left hand</span><b><span id="hudR">–</span> / <span id="hudL">–</span></b></div>
+      <span class="h-pop" id="hudPop" aria-hidden="true"></span>
+    </div>
+    <button class="btn" type="button" id="routineNext" hidden>Next</button>
   </div>
   <div class="p-body">
+    <div class="focus" id="focus" aria-label="Sticking">
+      <div class="stick" id="stickRow"></div>
+      <div class="pads"><div class="pad" id="padL"><b>L</b><span>Left hand</span></div><div class="pad" id="padR"><b>R</b><span>Right hand</span></div></div>
+      <div class="speed card" id="speedBox"><div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap"><b style="font-family:var(--head)">Speed builder</b><span class="muted" id="speedTxt" style="font-size:13px"></span></div><div class="ladder" id="speedLad"></div></div>
+    </div>
     <div class="kitbox" id="kitbox">
       <svg id="kit" viewBox="0 0 880 610" role="img" aria-label="Your drum kit, seen from your seat. The drum to hit lights up."></svg>
+      <canvas id="lane" height="96" aria-hidden="true"></canvas>
       <div class="overlay" id="endOverlay" hidden>
         <div class="card">
           <h2 id="endTitle">Nice work!</h2>
+          <div class="end-stars" id="endStars"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2l3 7 7 .6-5.3 4.7 1.7 7.2L12 17.8 5.6 21.5l1.7-7.2L2 9.6 9 9z"/></svg><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2l3 7 7 .6-5.3 4.7 1.7 7.2L12 17.8 5.6 21.5l1.7-7.2L2 9.6 9 9z"/></svg><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2l3 7 7 .6-5.3 4.7 1.7 7.2L12 17.8 5.6 21.5l1.7-7.2L2 9.6 9 9z"/></svg></div>
+          <div class="end-nums"><div><b id="endScore">0</b><span>Score</span></div><div><b id="endAcc">0%</b><span>On target</span></div><div><b id="endXp">+0</b><span>XP</span></div></div>
           <p class="muted" id="endText" style="margin:0"></p>
           <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center">
             <button class="btn primary" id="endAgain" type="button">Play again</button>
             <button class="btn" id="endSlower" type="button">Slower</button>
             <button class="btn" id="endNext" type="button">Next lesson</button>
+            <button class="btn" id="endRoutine" type="button" hidden>Next in routine</button>
           </div>
         </div>
       </div>
@@ -75,9 +126,15 @@
       </div>
       <div class="card" style="display:flex;flex-direction:column;gap:4px">
         <div class="eyebrow" style="margin-bottom:4px">Sounds</div>
+        <div id="songAudioRow" hidden style="padding:6px 0 8px;border-bottom:1px solid var(--line);margin-bottom:4px">
+          <label class="toggle"><input type="checkbox" id="optSong" checked>Play the song recording</label>
+          <p class="muted" id="songAudioName" style="font-size:12px;margin:0 0 4px 32px;word-break:break-all"></p>
+          <label class="toggle" style="gap:10px">Song volume <input type="range" id="songVol" min="0" max="100" style="flex:1"></label>
+        </div>
         <label class="toggle"><input type="checkbox" id="optMetro" checked>Metronome click</label>
         <label class="toggle"><input type="checkbox" id="optDemo">Play the pattern for me (listen)</label>
         <label class="toggle"><input type="checkbox" id="optHitSnd">App drum sounds when I hit</label>
+        <label class="toggle"><input type="checkbox" id="optSpeed" checked>Speed builder: 5 BPM faster after 2 clean loops</label>
         <label class="toggle"><input type="checkbox" id="optArtic" checked>Check how I play each note (open hi-hat, accents, ghost notes…)</label>
         <label class="toggle" style="gap:10px">Volume <input type="range" id="optVol" min="0" max="100" value="70" style="flex:1"></label>
               <div class="eyebrow" style="margin:10px 0 6px">No cable? Acoustic kit?</div>
@@ -103,6 +160,11 @@
       <input id="tempo" type="range" min="30" max="200" value="70">
       <output id="tempoOut" for="tempo">70 BPM</output>
     </div>
+    <div class="seg" role="group" aria-label="Layout">
+      <button type="button" data-lay="arena">Arena</button>
+      <button type="button" data-lay="coach">Coach</button>
+      <button type="button" data-lay="focus">Hands</button>
+    </div>
     <div class="seg" role="group" aria-label="View">
       <button type="button" data-v="kit">Kit only</button>
       <button type="button" data-v="both" aria-pressed="true">Kit + sheet</button>
@@ -121,20 +183,33 @@
       </div>
       <div class="drop" id="drop">
         <span style="color:var(--amber)"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M17 8l-5-5-5 5"/><path d="M12 3v12"/></svg></span>
-        <span class="muted">Drop a MIDI, MusicXML, PDF or photo here, or</span>
+        <span class="muted">Drop a MIDI, MusicXML, PDF, photo or song recording here, or</span>
         <button class="btn primary" type="button" id="pickFile">Choose file</button>
-        <input type="file" id="fileIn" class="sr" accept=".mid,.midi,.xml,.musicxml,.pdf,image/*">
+        <input type="file" id="fileIn" class="sr" accept=".mid,.midi,.xml,.musicxml,.pdf,image/*,audio/*,.mp3,.wav,.m4a,.ogg,.flac,.aac">
       </div>
       <div class="imports">
-        <button class="imp" type="button" data-pick=".mid,.midi"><span class="ic" style="background:#4CC9F022;color:#4CC9F0"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></span><b>MIDI file</b><span>Drum tracks (channel 10) become notes, with tempo.</span><code>.mid · .midi</code></button>
-        <button class="imp" type="button" data-pick=".xml,.musicxml"><span class="ic" style="background:#7BD38922;color:#7BD389"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg></span><b>MusicXML</b><span>Exported from MuseScore, Sibelius, Guitar Pro and others (uncompressed).</span><code>.musicxml · .xml</code></button>
-        <button class="imp" type="button" data-pick=".pdf,image/*"><span class="ic" style="background:#FFB54722;color:#FFB547"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></span><b>PDF or photo</b><span>Reads the notes automatically, then opens them in the note editor so you can check them.</span><code>.pdf · .jpg · .png</code></button>
+        <button class="imp" type="button" data-pick=".mid,.midi"><span class="ic" style="background:#4CC9F022;color:#4CC9F0"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></span><b>MIDI file</b><span>Takes the drum track (channel 10) from a whole-song MIDI file, with tempo.</span><code>.mid · .midi</code></button>
+        <button class="imp" type="button" data-pick=".xml,.musicxml"><span class="ic" style="background:#7BD38922;color:#7BD389"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg></span><b>MusicXML</b><span>Takes the drum part from a full score exported from MuseScore, Sibelius, Guitar Pro… (uncompressed).</span><code>.musicxml · .xml</code></button>
+        <button class="imp" type="button" data-pick=".pdf,image/*"><span class="ic" style="background:#FFB54722;color:#FFB547"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></span><b>PDF or photo</b><span>Reads the drum notes automatically, even from a full score with every instrument, then opens them in the editor to check.</span><code>.pdf · .jpg · .png</code></button>
+        <button class="imp" type="button" data-pick="audio/*,.mp3,.wav,.m4a,.ogg,.flac,.aac"><span class="ic" style="background:#F25C5422;color:#F25C54"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1v-6h3zM3 19a2 2 0 0 0 2 2h1v-6H3z"/></svg></span><b>Song recording</b><span>Gets the drum notes from an MP3 or other audio, and lets you play along with it.</span><code>.mp3 · .wav · .m4a</code></button>
         <button class="imp" type="button" id="newSong"><span class="ic" style="background:#B57EDC22;color:#B57EDC"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg></span><b>Write it yourself</b><span>Tap notes on a grid, or record by playing your kit.</span><code>Note editor</code></button>
       </div>
       <div class="card">
         <h2 style="font-size:20px;margin-bottom:4px">Beginner lessons</h2>
         <p class="muted" style="margin:0 0 6px;font-size:14px">Go in order. Each one adds a single new thing.</p>
         <div class="songs" id="lessonList"></div>
+      </div>
+      <div class="card">
+        <h2 style="font-size:20px;margin-bottom:4px">Daily basics</h2>
+        <p class="muted" style="margin:0 0 6px;font-size:14px">The movements to repeat every day: steady time, counting, even hands, feet, and hands and feet together. Start slow; the speed builder speeds you up as you get them clean.</p>
+        <div class="chips" id="basicTabs"></div>
+        <div class="songs" id="basicList"></div>
+      </div>
+      <div class="card">
+        <h2 style="font-size:20px;margin-bottom:4px">Rudiments</h2>
+        <p class="muted" style="margin:0 0 6px;font-size:14px">All 40 international drum rudiments with sticking. Play them on the snare pad. R and L under the notes show the hand.</p>
+        <div class="chips" id="rudTabs"></div>
+        <div class="songs" id="rudList"></div>
       </div>
       <div class="card">
         <h2 style="font-size:20px;margin-bottom:6px">My songs</h2>
@@ -191,6 +266,7 @@
       <label>Tempo (BPM)<input type="number" id="edBpm" min="30" max="240" style="width:100px"></label>
       <label>Bars<input type="number" id="edBars" min="1" max="32" style="width:80px"></label>
       <label>Beats per bar<select id="edBeats"><option value="4">4 (4/4)</option><option value="3">3 (3/4)</option></select></label>
+      <label>Grid<select id="edSub"><option value="4">16th notes</option><option value="3">8th-note triplets</option><option value="6">16th-note triplets</option><option value="8">32nd notes</option><option value="2">8th notes</option></select></label>
     </div>
     <div style="display:flex;gap:8px;flex-wrap:wrap">
       <button class="btn" type="button" id="edTraceBtn">Read notes from a sheet</button>
@@ -217,6 +293,25 @@
     </div>
   </div>
   <div class="gridbox"><div id="grid" role="grid" aria-label="Note grid"></div></div>
+  <div class="trace" id="edAudio">
+    <div class="eyebrow" style="margin-bottom:8px">Song recording (play along)</div>
+    <div id="edAudioNone" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <button class="btn" type="button" id="edAudioBtn">Attach the song's audio</button>
+      <span class="muted" style="font-size:13px">MP3, WAV, M4A… It plays in sync while you practise. Stored only in this browser.</span>
+    </div>
+    <input type="file" id="edAudioIn" class="sr" accept="audio/*,.mp3,.wav,.m4a,.ogg,.flac,.aac">
+    <div id="edAudioSet" hidden>
+      <p style="margin:0 0 8px;font-size:14px;color:var(--soft)"><b id="edAudioName"></b></p>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
+        <label style="display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted)">Bar 1 starts at (seconds)<input type="number" id="edAudioOffset" step="0.01" min="0" style="width:120px"></label>
+        <div class="seg" role="group" aria-label="Nudge the start"><button type="button" data-nudge="-0.1">−0.1 s</button><button type="button" data-nudge="-0.01">−0.01</button><button type="button" data-nudge="0.01">+0.01</button><button type="button" data-nudge="0.1">+0.1 s</button></div>
+        <label style="display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted)">Recording's tempo (BPM)<input type="number" id="edAudioBpm" step="0.1" min="30" max="300" style="width:110px"></label>
+        <button class="btn" type="button" id="edAudioReplace" onclick="document.getElementById('edAudioIn').click()">Replace</button>
+        <button class="btn danger" type="button" id="edAudioRemove">Remove</button>
+      </div>
+      <p class="muted" style="font-size:13px;line-height:1.5;margin:8px 0 0">Press <b>Listen</b>: the highlighted column should move with the drums in the recording. If it's early or late, nudge the start; if it drifts over time, adjust the tempo. Practising slower plays the song slower without changing its pitch.</p>
+    </div>
+  </div>
   <div class="ed-bottom">
     <p class="muted" style="margin:0;font-size:14px;max-width:760px;line-height:1.55">Pick how a note is played above the grid (normal, accent, ghost, open hi-hat…), then click squares. Clicking a note again with the same choice removes it; with another choice it changes it. Drag to paint.<br><b style="color:var(--red)">Record from kit</b> gives you a 1-bar count-in, then records what you play on your e-kit for the length of the song and snaps it to the grid. Each column is a 16th note; the numbers on top are the beats.</p>
   </div>
@@ -325,27 +420,46 @@
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px"><button class="btn" type="button" id="srCancel">Cancel</button><button class="btn primary" type="button" id="srGo">Read notes</button></div>
   </div>
 </div>
+<div class="modal" id="arDialog" hidden role="dialog" aria-modal="true" aria-labelledby="arTitle">
+  <div class="card modal-card">
+    <h2 id="arTitle" style="font-size:22px">Drum notes from a recording</h2>
+    <p class="muted" style="margin:2px 0 10px;font-size:14px;word-break:break-all" id="arFile"></p>
+    <p id="arStatus" class="muted" style="font-size:13px;margin:8px 0"></p>
+    <label style="display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--muted)">How
+      <select id="arMethod"><option value="ai">AI listening (your own key; full songs)</option><option value="offline">Offline (free; drums-only recordings)</option></select></label>
+    <p id="arHint" style="font-size:13px;color:var(--soft);line-height:1.5;margin:8px 0"></p>
+    <p class="muted" style="font-size:12px;line-height:1.5;margin:0">The recording is attached to the song, so you can play along with it.</p>
+    <p id="arErr" role="alert" style="color:#FF8A84;font-size:14px;margin:10px 0 0;line-height:1.5"></p>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px"><button class="btn" type="button" id="arCancel">Cancel</button><button class="btn primary" type="button" id="arGo">Get the drum notes</button></div>
+  </div>
+</div>
 <div class="toast" id="toast" hidden role="status"></div>
 
 <!-- Plain scripts (not ES modules) so the app also works when index.html is opened straight from disk. Order matters. -->
-<script src="js/data.js?v=0.4.2"></script>
-<script src="js/artic.js?v=0.4.2"></script>
-<script src="js/storage.js?v=0.4.2"></script>
-<script src="js/lessons.js?v=0.4.2"></script>
-<script src="js/util.js?v=0.4.2"></script>
-<script src="js/kits.js?v=0.4.2"></script>
-<script src="js/audio.js?v=0.4.2"></script>
-<script src="js/song.js?v=0.4.2"></script>
-<script src="js/kit.js?v=0.4.2"></script>
-<script src="js/engine.js?v=0.4.2"></script>
-<script src="js/sheet.js?v=0.4.2"></script>
-<script src="js/midi.js?v=0.4.2"></script>
-<script src="js/mic.js?v=0.4.2"></script>
-<script src="js/importers.js?v=0.4.2"></script>
-<script src="js/library.js?v=0.4.2"></script>
-<script src="js/sheetreader.js?v=0.4.2"></script>
-<script src="js/editor.js?v=0.4.2"></script>
-<script src="js/app.js?v=0.4.2"></script>
+<script src="js/data.js?v=0.6.0"></script>
+<script src="js/artic.js?v=0.6.0"></script>
+<script src="js/storage.js?v=0.6.0"></script>
+<script src="js/lessons.js?v=0.6.0"></script>
+<script src="js/rudiments.js?v=0.6.0"></script>
+<script src="js/util.js?v=0.6.0"></script>
+<script src="js/kits.js?v=0.6.0"></script>
+<script src="js/audio.js?v=0.6.0"></script>
+<script src="js/song.js?v=0.6.0"></script>
+<script src="js/kit.js?v=0.6.0"></script>
+<script src="js/engine.js?v=0.6.0"></script>
+<script src="js/sheet.js?v=0.6.0"></script>
+<script src="js/midi.js?v=0.6.0"></script>
+<script src="js/mic.js?v=0.6.0"></script>
+<script src="js/importers.js?v=0.6.0"></script>
+<script src="js/library.js?v=0.6.0"></script>
+<script src="js/sheetreader.js?v=0.6.0"></script>
+<script src="js/track.js?v=0.6.0"></script>
+<script src="js/audioreader.js?v=0.6.0"></script>
+<script src="js/editor.js?v=0.6.0"></script>
+<script src="js/progress.js?v=0.6.0"></script>
+<script src="js/layout.js?v=0.6.0"></script>
+<script src="js/today.js?v=0.6.0"></script>
+<script src="js/app.js?v=0.6.0"></script>
 
 </body>
 </html>

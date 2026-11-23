@@ -26,7 +26,9 @@ Both matter. Passing automated tests does **not** mean the app works well with y
 | AI sheet reader | With **stand-ins** for the Gemini, Groq, OpenRouter, Alibaba, Mistral, Hugging Face, Claude and OpenAI-compatible APIs, plus a user-added service (name, address, key, image-format retry, removal) and Alibaba's region address: endpoint, key in a header (never the URL), image sent, low reasoning on OpenRouter; drum-tab answers → notes (incl. dashes, bar marks, short lines, 3/4, no BAR line, unreadable); cut-off answer, retry without reasoning, wrong-provider key, Gemini model filtering, free-tier wait-and-retry, rejected key, model drop-down | Passed (54 checks). **Not tested against any real API** (no keys during development) |
 | Kits | Presets; add tom/crash/kick; MIDI note moves to the new crash; second kick = left foot; drag a piece; per-kit pad mapping; fallback (tom2 → tom1 on a small kit); survives reload; remove a piece; big kit practice | Passed (14 checks) |
 | Articulations | Lessons; judging with simulated MIDI (open played closed and vice versa, soft accents, ghost notes, checking switched off, Wait for me); kit label; notation marks; editor tools; recording; MIDI/MusicXML/AI-tab import; pad-mapping rows and note numbers; microphone loudness | Passed (26 checks) |
-| Layout | Desktop (1440 px) and phone (390 px) screenshots checked by eye | Passed |
+| Song audio + full scores | Offline drum reader on a generated 100 BPM drum track (tempo, bar 1, notes, open hi-hats); play-along sync, tempo change with pitch kept, pause, Wait for me; IndexedDB; AI listening with a stand-in Gemini API; full-score PDF and MusicXML keep only the drums | Passed (18 checks): 96/96 notes, 0 extra. **AI listening not tested against a real API** |
+| Practice (rudiments, basics, scores) | 40 rudiments + 22 basics fill whole bars; paradiddle sticking and accents; triplet grid and counting; R/L under the notes; two clean loops → 3 stars, combo, speed builder +5 BPM; per-hand accuracy; flams and drags played with real grace-note hits; click-drop and 2-and-4 drills; editor grid conversion; routine, streak, levels, badges, Today; sideways-phone layout; end screen; progress kept after reload | Passed (19 checks) |
+| Layout | Desktop (1440 px) and phone (390 px) screenshots checked by eye; Arena, Coach, Hands and sideways phone (844 × 390) | Passed |
 | Console | No JavaScript errors on any screen | Passed |
 
 The mic detection test uses **synthesised** drum sounds in a quiet signal, so it's a best case. Real drums, room echo and a phone mic will do worse. Likewise, the offline sheet reader was tested on notation drawn by this app; sheet music from books, MuseScore or other engravers looks different and will read less reliably.
@@ -115,6 +117,20 @@ Work through this on your own hardware, then tick each item (edit this file on G
 - [ ] Lesson 15: rimshots are recognised
 - [ ] Record from kit keeps open hi-hats, rimshots, accents and ghost notes
 - [ ] Microphone (acoustic): teach open hi-hat; is open vs closed told apart? (__ / 10)
+
+### Rudiments, basics and scores
+- [ ] Play the single paradiddle on the snare pad in the *Hands* layout: do the pads light the right hand, and do accents need a harder hit?
+- [ ] Play flams and drags on the Nitro Mesh: is each counted once (no "Too early" from the grace note)? At what tempo do grace notes start being taken as separate notes?
+- [ ] Do two clean loops raise the tempo by 5 BPM? Does it feel like the right pace?
+- [ ] Do the *keep time when the click drops out* and *click on 2 and 4* drills sound right?
+- [ ] Do the stars feel fair (70 / 85 / 95 %)?
+- [ ] Is the daily routine a sensible length (about 10-15 minutes)?
+- [ ] Hold an Android phone sideways: does the kit fill the screen, and can you reach Play?
+
+### Song recordings
+- [ ] Offline reader on a drums-only recording (record your e-kit's output): tempo and bar 1 right?
+- [ ] AI listening with a Gemini key on a real song: are the drums and open hi-hats right?
+- [ ] Play along: does the song stay in time at slower tempos?
 
 ### Kits
 - [ ] Create a kit that matches your real kit (pieces, names, positions)
