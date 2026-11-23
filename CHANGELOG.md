@@ -2,6 +2,12 @@
 
 All notable changes to this project. Dates are YYYY-MM-DD.
 
+## [0.4.2] - 2026-11-23
+### Fixed
+- After an update, browsers could keep showing the previous version for a while. Files now carry a version number, the offline copy always checks GitHub for newer files, and the app reloads itself once when a new version is installed.
+### Added
+- The app version is shown in the header.
+
 ## [0.4.1] - 2026-11-23
 ### Added
 - AI reader providers: **Alibaba Cloud Model Studio** (Qwen, region address editable), **Mistral** and **Hugging Face**.

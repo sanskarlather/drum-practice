@@ -56,4 +56,10 @@ if (navigator.permissions && navigator.requestMIDIAccess) {
 
 
 // Offline support + "Add to Home screen" when served over https (e.g. GitHub Pages).
-if ("serviceWorker" in navigator && location.protocol === "https:") navigator.serviceWorker.register("sw.js").catch(()=>{});
+if ("serviceWorker" in navigator && location.protocol === "https:") {
+  navigator.serviceWorker.register("sw.js").then(reg => reg.update()).catch(()=>{});
+  // when a new version takes over, reload once so every file is the new one
+  // (not on the very first visit, when there was no older version to replace)
+  const hadOld = !!navigator.serviceWorker.controller; let reloaded = false;
+  navigator.serviceWorker.addEventListener("controllerchange", () => { if (hadOld && !reloaded) { reloaded = true; location.reload(); } });
+}
