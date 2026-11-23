@@ -56,7 +56,7 @@ It runs entirely in the browser: there is no server or account, and nothing you 
 **Music**
 - 10 built-in beginner lessons, from "hi-hat only" to fills around the toms.
 - Import **MIDI** (`.mid`) and **MusicXML** (`.musicxml`, `.xml`) files.
-- **Read a PDF or photo of drum sheet music automatically**, with the AI reader (your own Anthropic API key) or the free offline reader.
+- **Read a PDF or photo of drum sheet music automatically**, with the AI reader (your own key from Google Gemini, OpenRouter, Anthropic Claude or any OpenAI-compatible service; Gemini and OpenRouter have free options) or the free offline reader.
 - A **note editor**: click a grid, or **record from your kit** after a count-in.
 - Your songs and best scores are saved in your browser.
 
@@ -111,13 +111,22 @@ In **Library**, choose **PDF or photo** (or drop the file on the page). The app 
 
 | | AI reader | Offline reader |
 |---|---|---|
-| How it works | Sends the page images to Claude (Anthropic) | Optical music recognition, in your browser |
-| Accuracy | Best; handles photos, repeats, most notation | Good on clean printed sheets with simple rhythms |
-| Cost | Charged to **your own** Anthropic API account | Free |
-| Privacy | Pages are sent to Anthropic | Nothing leaves your device |
+| How it works | Sends the page images to an AI model from the provider you choose | Optical music recognition, in your browser |
+| Accuracy | Best; handles photos, repeats, most notation (depends on the model) | Good on clean printed sheets with simple rhythms |
+| Cost | Free within Gemini's free tier or OpenRouter's free models; otherwise charged to **your own** account | Free |
+| Privacy | Pages are sent to that provider | Nothing leaves your device |
 | Needs | An API key and internet | Nothing |
 
-**Your own API key.** The AI reader never uses a key built into the app: there isn't one. Each person who wants it pastes their own key under **Library → Sheet reading**. It's stored only in that browser (or for the current session only, if you untick *Remember*), it's sent only to Anthropic, and it's never part of this repository. So nobody using your copy of the app can run up charges on your account. Get a key at [console.anthropic.com](https://console.anthropic.com/settings/keys) and set a monthly spend limit there. Without a key, the app uses the offline reader.
+**AI providers** (choose under **Library → Sheet reading → AI provider**):
+
+| Provider | Cost | Get a key |
+|---|---|---|
+| **Google Gemini** (default) | Free tier, no payment needed; limited requests per day. On the free tier Google may use what you send to improve its products. | [aistudio.google.com/apikey](https://aistudio.google.com/apikey) |
+| **OpenRouter** | Free models (ending in `:free`, or the `openrouter/free` router) with daily limits; paid models too | [openrouter.ai/settings/keys](https://openrouter.ai/settings/keys) |
+| **Anthropic Claude** | Needs prepaid API credit | [console.anthropic.com](https://console.anthropic.com/settings/keys) |
+| **Other OpenAI-compatible** | Depends on the service (OpenAI, Groq, Mistral, a local LM Studio or Ollama server…) | From that service; enter its base URL too |
+
+**Your own API key.** The AI reader never uses a key built into the app: there isn't one. Each person who wants it pastes their own key. It's stored only in that browser (or for the current session only, if you untick *Remember*), sent only to the provider you chose, and never part of this repository. So nobody using your copy of the app can run up charges on your account. **Test key** and **Load models** only list the models your key can use, which costs nothing. Without a key, the app uses the offline reader.
 
 The offline reader marks what it found on the page (circles around notes, blue barlines, bar numbers), so you can spot mistakes quickly. Either way, always check the result before practising.
 
@@ -159,7 +168,7 @@ The offline sheet reader works everywhere; the AI reader needs an internet conne
 ## Known limitations
 
 - The **offline sheet reader** works best on clean, printed, straight sheets with simple rhythms. It assumes notes are spaced roughly in proportion to time, so mixed rhythms, triplets, repeat signs, multi-bar rests and handwritten music often come out wrong. It reads up to 8 pages.
-- The **AI reader** is much better but can still make mistakes, needs internet and your own API key, and costs a little per page.
+- The **AI reader** is much better but can still make mistakes (free and smaller models make more), needs internet and your own API key, and is subject to each provider's limits.
 - The note grid is 16th notes only. Triplets, swing and grace notes are rounded to the nearest 16th.
 - 4/4 and 3/4 only in the editor.
 - Compressed MusicXML (`.mxl`) isn't supported.
@@ -205,7 +214,7 @@ There's no build step and nothing to install: edit a file, refresh the page. The
 
 This project was built in conversation with an AI assistant (Claude, by Anthropic):
 
-- **Me (the human):** the idea and requirements (an e-kit practice app with a visual kit for absolute beginners, phone support, microphone mode, automatic sheet reading with each user's own API key, customisable kits), feedback on the mockups (I asked for the drum kit to be the main element instead of falling notes), choices about devices and features, and testing on real hardware.
+- **Me (the human):** the idea and requirements (an e-kit practice app with a visual kit for absolute beginners, phone support, microphone mode, automatic sheet reading with each user's own API key from any provider, customisable kits), feedback on the mockups (I asked for the drum kit to be the main element instead of falling notes), choices about devices and features, and testing on real hardware.
 - **The AI:** the mockups, all of the code, the lessons, the automated tests and the first draft of these documents.
 
 Automated tests (run by the AI in a headless browser) cover playback, judging, wait mode, the importers, the editor, phone layout, microphone hit detection with synthesised drum sounds, the offline sheet reader on generated sheets, the AI reader against a stand-in API, and kit customisation. They **can't** confirm how it feels with real drums, real rooms or real latency; that's what the human testing checklist in [docs/TESTING.md](docs/TESTING.md) is for.
@@ -222,7 +231,7 @@ If you use or adapt this code, please check it yourself rather than assuming it'
 | MIDI / MusicXML import | Passed with sample files | _Not yet_ |
 | Android phone | Layout checked in emulation | _Not yet_ |
 | Offline sheet reader | Passed on sheets drawn by the app (clean, photo-like, PDF) | _Not yet_ (try real sheet music) |
-| AI sheet reader | Request/response checked with a stand-in API; **never run against the real API** | _Not yet_ (needs your key) |
+| AI sheet reader (Gemini, OpenRouter, Claude, OpenAI-compatible) | Requests/answers checked with stand-ins for each API; **never run against a real API** | _Not yet_ (needs your key) |
 | Kit customisation | Passed | _Not yet_ |
 
 Update this table as you work through [docs/TESTING.md](docs/TESTING.md).

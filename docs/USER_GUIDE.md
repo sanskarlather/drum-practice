@@ -109,19 +109,23 @@ Imported songs always open in the editor first, so you can check them.
 
 1. In **Library**, press **PDF or photo** (or drop the file on the dashed box). You can also use **Read notes from a sheet** in the note editor.
 2. Check the page previews, then pick a reader:
-   - **AI reader:** uses Claude with **your own** API key. Best for photos and anything complex. It works out the time signature and tempo itself.
+   - **AI reader:** uses the AI provider you chose, with **your own** API key. Best for photos and anything complex. It works out the time signature and tempo itself.
    - **Offline reader:** free and private. Choose the time signature (4/4 or 3/4) first.
 3. Press **Read notes**. The song opens in the note editor with the sheet above the grid. After the offline reader, the sheet is marked with what was found: coloured circles around notes, blue lines on barlines and bar numbers.
 4. Compare the grid with the sheet, fix anything wrong, set the tempo, then press **Practise this**.
 
 **Setting up the AI reader (Library → Sheet reading):**
-1. Create a key at [console.anthropic.com](https://console.anthropic.com/settings/keys). While you're there, set a monthly spend limit.
-2. Paste it into **Your Anthropic API key** and press **Save key**, then **Test key**.
-3. Untick **Remember the key on this device** if you'd rather paste it each session (useful on a shared computer).
-4. **Model:** Sonnet is a good balance; Opus is the most careful and costs more; Haiku is cheapest but makes more mistakes.
+1. Pick an **AI provider**:
+   - **Google Gemini** (the default): free tier, no payment needed. Sign in at [aistudio.google.com/apikey](https://aistudio.google.com/apikey) with a Google account and press *Create API key*. The free tier has daily limits, and Google may use free-tier requests to improve its products.
+   - **OpenRouter**: one key for many models, including free ones. Create a key at [openrouter.ai/settings/keys](https://openrouter.ai/settings/keys). The default model `openrouter/free` picks a free model for you; for steadier results press **Load models** and choose a specific vision model (free ones end in `:free`).
+   - **Anthropic Claude**: needs prepaid credit. Key from [console.anthropic.com](https://console.anthropic.com/settings/keys).
+   - **Other OpenAI-compatible service**: enter its **Base URL** (for example `https://api.openai.com/v1`, or `http://localhost:1234/v1` for LM Studio), a key if it needs one, and a model that can read images.
+2. Paste your key and press **Save key**, then **Test key**. This only lists your models, so it costs nothing.
+3. **Model:** keep the suggested one, or press **Load models** and pick from the list. Bigger models read better; free and small ones make more mistakes.
+4. Untick **Remember keys on this device** if you'd rather paste the key each session (useful on a shared computer).
 5. **Which reader:** "AI if a key is set, otherwise offline" is the default.
 
-The key is stored only in this browser and sent only to Anthropic. It is not in the app's code or on GitHub, so anyone else using the app needs their own.
+Keys are stored only in this browser and sent only to the provider you chose. They're not in the app's code or on GitHub, so anyone else using the app needs their own.
 
 **Getting good results from the offline reader:**
 - Use a PDF, or a photo taken straight on from above, in good even light, with the whole page in frame.
@@ -197,3 +201,6 @@ Yes: use the AI reader (with your own API key) for the best results, or the free
 
 **Will other people using my app spend my API credit?**
 No. There's no key in the app. Each person adds their own key in their own browser.
+
+**Do I have to pay for the AI reader?**
+No. Google Gemini's free tier and OpenRouter's free models both work without payment, within their daily limits. If you hit a limit, wait (or try the next day), or use the offline reader.

@@ -22,7 +22,7 @@ How the app works, for anyone (including future me) changing the code.
 
 - **No build step.** Plain HTML, CSS and JavaScript. Open `index.html` and it runs. The only third-party code is PDF.js in `vendor/`.
 - **Works from disk and from GitHub Pages.** Scripts are classic `<script>` tags rather than ES modules, because browsers block modules on `file://` pages. Top-level `const`, `let` and `function` declarations are shared across files.
-- **Everything stays on the device** unless you use the AI sheet reader, which sends page images to Anthropic with your own key. Otherwise the only network request is Google Fonts, and the app works without them.
+- **Everything stays on the device** unless you use the AI sheet reader, which sends page images to the provider you chose, with your own key. Otherwise the only network request is Google Fonts, and the app works without them.
 - **One clock.** All timing uses the Web Audio clock (`AudioContext.currentTime`), so the metronome, the visuals, MIDI hits and microphone hits line up.
 
 ## Files and load order
@@ -80,7 +80,7 @@ Order matters only for code that runs at load time (later files may call functio
 
 ### Settings (saved as `drumapp.settings`)
 
-`metro`, `demo`, `hitSnd`, `vol`, `loop`, `wait`, `view`, `offset` (ms, USB/tap timing adjustment), `lastSong`, `kit` (active kit id), `mic`: `{sens, offset, check}`, and `ai`: `{key, remember, model, method}`. At runtime `settings.map` and `settings.mic.cal` point at the active kit's `map` and `cal`; they're saved with the kits, not in settings.
+`metro`, `demo`, `hitSnd`, `vol`, `loop`, `wait`, `view`, `offset` (ms, USB/tap timing adjustment), `lastSong`, `kit` (active kit id), `mic`: `{sens, offset, check}`, and `ai`: `{provider, keys:{provider: key}, models:{provider: model}, baseUrl, remember, method}`. At runtime `settings.map` and `settings.mic.cal` point at the active kit's `map` and `cal`; they're saved with the kits, not in settings.
 
 ## From song to events
 
@@ -171,10 +171,20 @@ To compare against **several drums at once** (e.g. kick + hi-hat), the taught ba
 `sheetreader.js` turns a PDF or image into page canvases. PDF pages are rendered with **PDF.js** (`vendor/pdfjs`) at ~2200 px on the long edge. On `file://` pages the PDF.js worker runs on the main thread, because browsers won't start workers there. Up to 8 pages are read.
 
 ### AI reader
-- Pages are downscaled to 1568 px on the long edge, JPEG-encoded, and sent in one Messages API request (`POST https://api.anthropic.com/v1/messages`) straight from the browser, with the `anthropic-dangerous-direct-browser-access: true` header.
-- **The key is the user's own**, read from `settings.ai` (localStorage) or kept in memory for the session only. No key exists in the code.
-- The prompt asks for every bar written out on a 16th-note grid (repeats expanded), with standard drum-notation positions and any legend on the page taking priority. The answer is constrained with structured outputs (`output_config.format` JSON schema). If the API rejects that parameter, the request is retried asking for plain JSON.
-- Errors are translated into plain messages (bad key, rate limit, out of credit, busy, too long).
+- Pages are downscaled to 1568 px on the long edge, JPEG-encoded, and sent in one request, straight from the browser, to the provider chosen in `settings.ai.provider`. `AI_PROVIDERS` lists the providers; `AI_CALL` has one function per provider:
+
+| Provider | Endpoint | Key header | JSON output |
+|---|---|---|---|
+| `gemini` | `generativelanguage.googleapis.com/v1beta/models/{model}:generateContent` | `x-goog-api-key` | `generationConfig.responseJsonSchema` |
+| `anthropic` | `api.anthropic.com/v1/messages` (+ `anthropic-dangerous-direct-browser-access`) | `x-api-key` | `output_config.format` |
+| `openrouter` | `openrouter.ai/api/v1/chat/completions` | `Authorization: Bearer` | prompt asks for JSON |
+| `custom` | `{base URL}/chat/completions` (OpenAI-compatible) | `Authorization: Bearer` (if a key is set) | prompt asks for JSON |
+
+- Keys always go in headers, never in the URL. If a provider rejects the JSON-schema option, the request is retried asking for plain JSON in the prompt. Answers are parsed with code fences stripped.
+- **Keys are the user's own**, kept per provider in `settings.ai.keys` (localStorage) or in memory for the session only (`SR.sessionKeys`). No key exists in the code.
+- `srListModels()` calls each provider's model-list endpoint. It backs **Test key** and **Load models** and costs nothing.
+- The prompt asks for every bar written out on a 16th-note grid (repeats expanded), with standard drum-notation positions and any legend on the page taking priority.
+- Errors are translated into plain messages (bad key, free-tier limit, rate limit, no credit, unknown model, busy, too long).
 
 ### Offline reader (optical music recognition)
 Per page:

@@ -1,19 +1,30 @@
 "use strict";
 /* ---------- Sheet music reader: PDF or photo -> notes ----------
  * Two readers, both producing a normal song that opens in the note editor for checking:
- *   AI reader      - sends the page images to Claude with the USER'S OWN Anthropic API key
- *                    (entered in the app, stored only in that browser; never in this code).
+ *   AI reader      - sends the page images to an AI model with the USER'S OWN API key, from a provider of
+ *                    their choice (Anthropic Claude, Google Gemini, OpenRouter or any OpenAI-compatible
+ *                    service). Keys are entered in the app and stored only in that browser; never in this code.
  *   Offline reader - classic optical music recognition in the browser. Free and private,
  *                    but only reliable on clean, printed drum notation with simple rhythms.
  * See docs/ARCHITECTURE.md, "Sheet reader".
  */
 const PDFJS_BASE = (typeof window.PDFJS_BASE === "string") ? window.PDFJS_BASE : "vendor/pdfjs/";
-const SR = { sessionKey: "" };
-const AI_MODELS = [
-  ["claude-sonnet-5-5", "Claude Sonnet 5.5 (recommended)"],
-  ["claude-opus-5-5",   "Claude Opus 5.5 (most careful, costs more)"],
-  ["claude-haiku-5-5",  "Claude Haiku 5.5 (fastest, cheapest, less accurate)"],
-];
+const SR = { sessionKeys: {} };
+// AI providers. Each person uses their own key; nothing here is a key.
+const AI_PROVIDERS = {
+  gemini: { label: "Google Gemini (free tier available)", keyUrl: "https://aistudio.google.com/apikey", keyHint: "AIza…",
+    models: [["gemini-3.8-flash", "Gemini 3.8 Flash"]],
+    note: "Google's free tier needs no payment, but has low daily limits and can be busy at times. On the free tier Google may use what you send to improve its products." },
+  openrouter: { label: "OpenRouter (free models available)", keyUrl: "https://openrouter.ai/settings/keys", keyHint: "sk-or-…",
+    models: [["openrouter/free", "Free models router (picks a free model)"]],
+    note: "Models ending in :free cost nothing but have daily limits; quality varies by model. Use “Load models” to pick a specific vision model." },
+  anthropic: { label: "Anthropic Claude", keyUrl: "https://console.anthropic.com/settings/keys", keyHint: "sk-ant-…",
+    models: [["claude-sonnet-5-5", "Claude Sonnet 5.5"], ["claude-opus-5-5", "Claude Opus 5.5 (most careful)"], ["claude-haiku-5-5", "Claude Haiku 5.5 (cheapest)"]],
+    note: "Needs prepaid API credit on your Anthropic account." },
+  custom: { label: "Other OpenAI-compatible service", keyUrl: "", keyHint: "your key",
+    models: [],
+    note: "For OpenAI, Groq, Mistral, a local LM Studio/Ollama server, etc. Enter its base URL (usually ending in /v1) and a model that can read images. The service must allow requests from web pages (CORS)." },
+};
 const SR_MAX_PAGES = 8;
 
 /* ============ loading pages as canvases ============ */
@@ -86,70 +97,140 @@ Write out every bar in playing order as a list of hits on a 16th-note grid:
 - "notes": one or two short sentences about anything you were unsure of or had to simplify. Empty if nothing.
 - If the images are not drum notation, or are unreadable, set "readable" to false and explain in "notes".`;
 
-function srKey(){ return settings.ai.remember ? settings.ai.key : SR.sessionKey; }
+const aiProv = () => settings.ai.provider;
+function srKey(prov = aiProv()){ return (settings.ai.remember ? settings.ai.keys[prov] : SR.sessionKeys[prov]) || ""; }
+function srModel(prov = aiProv()){ return settings.ai.models[prov] || (AI_PROVIDERS[prov].models[0] || [""])[0]; }
+function srBase(prov = aiProv()){
+  if (prov === "openrouter") return "https://openrouter.ai/api/v1";
+  return (settings.ai.baseUrl || "").trim().replace(/\/+$/, "").replace(/\/chat\/completions$/, "");
+}
 function srJpeg(c, maxEdge = 1568){
   const s = Math.min(1, maxEdge / Math.max(c.width, c.height));
   const o = document.createElement("canvas"); o.width = Math.round(c.width * s); o.height = Math.round(c.height * s);
   o.getContext("2d").drawImage(c, 0, 0, o.width, o.height);
   return o.toDataURL("image/jpeg", 0.88).split(",")[1];
 }
-async function srCallClaude(key, body){
+async function srFetch(url, opts){
   let r;
-  try {
-    r = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json", "anthropic-dangerous-direct-browser-access": "true" },
-      body: JSON.stringify(body)
-    });
-  } catch (e) {
-    throw new Error("Couldn't reach the Claude API. Check your internet connection. (Inside claude.ai the app can't make this request: use your GitHub Pages link.)");
-  }
-  const text = await r.text();
-  return { ok: r.ok, status: r.status, text };
+  try { r = await fetch(url, opts); }
+  catch (e) { throw new Error("Couldn't reach " + new URL(url).host + ". Check your internet connection. (Inside claude.ai the app can't make this request: use your GitHub Pages link. A custom service must allow requests from web pages.)"); }
+  return { ok: r.ok, status: r.status, text: await r.text() };
 }
-function srApiError(r){
-  let msg = ""; try { msg = JSON.parse(r.text).error.message; } catch (e) {}
-  if (r.status === 401) return "The API key was rejected. Check it in Library → Sheet reading.";
-  if (r.status === 403) return "This API key isn't allowed to do that: " + msg;
-  if (r.status === 429) return "Too many requests right now (rate limit). Wait a minute and try again.";
-  if (r.status === 529 || r.status === 503) return "Claude is busy right now. Try again in a minute, or use the offline reader.";
-  if (/credit|billing|balance/i.test(msg)) return "Your Anthropic account is out of credit: " + msg;
-  return `Claude API error ${r.status}${msg ? ": " + msg : ""}`;
+function srErrMsg(r){ try { const j = JSON.parse(r.text); return (j.error && (j.error.message || j.error)) || j.message || ""; } catch (e) { return r.text.slice(0, 200); } }
+function srApiError(r, prov = aiProv()){
+  const msg = String(srErrMsg(r) || ""), name = AI_PROVIDERS[prov].label.replace(/ \(.*\)$/, "");
+  if (r.status === 401 || /API_KEY_INVALID|invalid.*key|incorrect api key/i.test(msg)) return `The ${name} API key was rejected. Check it in Library → Sheet reading.`;
+  if (r.status === 402 || /credit|billing|balance|insufficient/i.test(msg)) return `Your ${name} account has no credit for this: ${msg}`;
+  if (r.status === 429) return prov === "gemini" ? "Gemini's free-tier limit was reached. Wait a minute (or until tomorrow for the daily limit) and try again." : `Too many requests to ${name} right now. Wait a minute and try again.`;
+  if (r.status === 404 || /not found|does not exist|unknown model/i.test(msg)) return `The model “${srModel(prov)}” wasn't found. Press “Load models” in Library → Sheet reading and pick one.`;
+  if (r.status === 503 || r.status === 529 || r.status === 500) return `${name} is busy right now. Try again in a minute, or use the offline reader.`;
+  if (r.status === 403) return `${name} refused the request: ${msg}`;
+  return `${name} error ${r.status}${msg ? ": " + msg : ""}`;
 }
-function srExtractJson(t){ const a = t.indexOf("{"), b = t.lastIndexOf("}"); if (a < 0 || b < a) throw new Error("Claude didn't return a readable answer. Try again."); return t.slice(a, b + 1); }
-async function srAiRead(canvases, onStep){
-  const key = srKey(); if (!key) throw new Error("Add your Anthropic API key first (Library → Sheet reading).");
-  const content = [];
-  canvases.forEach((c, i) => { content.push({ type: "text", text: `Page ${i + 1}:` }); content.push({ type: "image", source: { type: "base64", media_type: "image/jpeg", data: srJpeg(c) } }); });
-  content.push({ type: "text", text: AI_PROMPT });
-  const body = { model: settings.ai.model, max_tokens: 16000, messages: [{ role: "user", content }], output_config: { format: { type: "json_schema", schema: AI_SCHEMA } } };
-  onStep && onStep(`Sending ${canvases.length} page${canvases.length > 1 ? "s" : ""} to Claude…`);
-  let r = await srCallClaude(key, body);
-  if (!r.ok && r.status === 400 && /output_config|json_schema|format/i.test(r.text)) {
-    // Older API versions or models without structured outputs: ask for plain JSON instead.
-    delete body.output_config;
-    content.push({ type: "text", text: "Reply with only one JSON object with the keys readable, title, bpm, beats_per_bar, bars (each {hits:[{step, drums}]}), notes. No other text." });
-    r = await srCallClaude(key, body);
-  }
-  if (!r.ok) throw new Error(srApiError(r));
-  const data = JSON.parse(r.text);
-  if (data.stop_reason === "max_tokens") throw new Error("The piece is too long to read in one go. Try a PDF with fewer pages.");
-  if (data.stop_reason === "refusal") throw new Error("Claude declined to read this image.");
-  const j = JSON.parse(srExtractJson((data.content || []).filter(b => b.type === "text").map(b => b.text).join("")));
-  if (j.readable === false) throw new Error("Claude couldn't read drum notation here" + (j.notes ? ": " + j.notes : "."));
-  const beats = j.beats_per_bar === 3 ? 3 : 4, spb = beats * 4, notes = [];
-  (j.bars || []).forEach((bar, bi) => (bar.hits || []).forEach(hh => {
-    const s = Math.max(0, Math.min(spb - 1, Math.round(hh.step)));
-    (hh.drums || []).forEach(d => { const id = AI_TO_ID[d]; if (id && !notes.some(n => n.s === bi*spb + s && n.d === id)) notes.push({ s: bi*spb + s, d: id }); });
-  }));
-  const usage = data.usage ? `${data.usage.input_tokens + data.usage.output_tokens} tokens` : "";
-  return { title: j.title || "", bpm: j.bpm > 20 && j.bpm < 300 ? j.bpm : 0, beats, bars: Math.max(1, (j.bars || []).length), notes, report: (j.notes || "") , usage };
+function srExtractJson(t){
+  t = t.replace(/```(?:json)?/g, "");
+  const a = t.indexOf("{"), b = t.lastIndexOf("}"); if (a < 0 || b < a) throw new Error("The AI didn't return a readable answer. Try again, or try another model.");
+  return t.slice(a, b + 1);
 }
-async function srTestKey(key){
-  const r = await srCallClaude(key, { model: settings.ai.model, max_tokens: 1, messages: [{ role: "user", content: "Hi" }] });
-  if (!r.ok) throw new Error(srApiError(r));
-}
+const AI_JSON_HINT = "Reply with only one JSON object with the keys readable, title, bpm, beats_per_bar, bars (each {\"hits\":[{\"step\":0,\"drums\":[\"kick\"]}]}), notes. No other text.";
 
+// One call per provider. Each returns {text, usage}.
+const AI_CALL = {
+  async anthropic(images, key, model){
+    const content = [];
+    images.forEach((d, i) => { content.push({ type: "text", text: `Page ${i + 1}:` }); content.push({ type: "image", source: { type: "base64", media_type: "image/jpeg", data: d } }); });
+    content.push({ type: "text", text: AI_PROMPT });
+    const body = { model, max_tokens: 16000, messages: [{ role: "user", content }], output_config: { format: { type: "json_schema", schema: AI_SCHEMA } } };
+    const go = () => srFetch("https://api.anthropic.com/v1/messages", { method: "POST", body: JSON.stringify(body),
+      headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json", "anthropic-dangerous-direct-browser-access": "true" } });
+    let r = await go();
+    if (!r.ok && r.status === 400 && /output_config|json_schema|format/i.test(r.text)) { delete body.output_config; content.push({ type: "text", text: AI_JSON_HINT }); r = await go(); }
+    if (!r.ok) throw new Error(srApiError(r, "anthropic"));
+    const data = JSON.parse(r.text);
+    if (data.stop_reason === "max_tokens") throw new Error("The piece is too long to read in one go. Try a PDF with fewer pages.");
+    if (data.stop_reason === "refusal") throw new Error("The model declined to read this image.");
+    return { text: (data.content || []).filter(b => b.type === "text").map(b => b.text).join(""), usage: data.usage ? `${data.usage.input_tokens + data.usage.output_tokens} tokens` : "" };
+  },
+  async gemini(images, key, model){
+    const parts = [];
+    images.forEach((d, i) => { parts.push({ text: `Page ${i + 1}:` }); parts.push({ inlineData: { mimeType: "image/jpeg", data: d } }); });
+    parts.push({ text: AI_PROMPT });
+    const body = { contents: [{ role: "user", parts }], generationConfig: { responseMimeType: "application/json", responseJsonSchema: AI_SCHEMA, maxOutputTokens: 16000 } };
+    const go = () => srFetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model.replace(/^models\//, ""))}:generateContent`,
+      { method: "POST", headers: { "x-goog-api-key": key, "content-type": "application/json" }, body: JSON.stringify(body) });
+    let r = await go();
+    if (!r.ok && r.status === 400 && /responseJsonSchema|schema|response_json_schema/i.test(r.text)) { delete body.generationConfig.responseJsonSchema; parts.push({ text: AI_JSON_HINT }); r = await go(); }
+    if (!r.ok) throw new Error(srApiError(r, "gemini"));
+    const data = JSON.parse(r.text);
+    if (data.promptFeedback && data.promptFeedback.blockReason) throw new Error("Gemini blocked this request (" + data.promptFeedback.blockReason + ").");
+    const cand = (data.candidates || [])[0];
+    if (!cand) throw new Error("Gemini returned no answer. Try again.");
+    if (cand.finishReason === "MAX_TOKENS") throw new Error("The piece is too long to read in one go. Try a PDF with fewer pages.");
+    const u = data.usageMetadata;
+    return { text: ((cand.content && cand.content.parts) || []).map(p => p.text || "").join(""), usage: u ? `${u.totalTokenCount} tokens` : "" };
+  },
+  async openrouter(images, key, model){ return AI_CALL.custom(images, key, model, "openrouter"); },
+  async custom(images, key, model, prov = "custom"){
+    const base = srBase(prov); if (!base) throw new Error("Enter the service's base URL in Library → Sheet reading.");
+    if (!model) throw new Error("Enter a model name in Library → Sheet reading (press “Load models” to see what's available).");
+    const content = [{ type: "text", text: AI_PROMPT + "\n\n" + AI_JSON_HINT }];
+    images.forEach(d => content.push({ type: "image_url", image_url: { url: "data:image/jpeg;base64," + d } }));
+    const headers = { "content-type": "application/json" };
+    if (key) headers.authorization = "Bearer " + key;
+    if (prov === "openrouter") { headers["HTTP-Referer"] = location.origin; headers["X-Title"] = "Drum Practice"; }
+    const body = { model, messages: [{ role: "user", content }], max_tokens: 8000 };
+    const go = () => srFetch(base + "/chat/completions", { method: "POST", headers, body: JSON.stringify(body) });
+    let r = await go();
+    if (!r.ok && r.status === 400 && /max_tokens/i.test(r.text)) { delete body.max_tokens; r = await go(); }
+    if (!r.ok) throw new Error(srApiError(r, prov));
+    const data = JSON.parse(r.text);
+    if (data.error) throw new Error(srApiError({ status: data.error.code || 500, text: JSON.stringify(data) }, prov));
+    const ch = (data.choices || [])[0]; if (!ch) throw new Error("The service returned no answer. Try again.");
+    if (ch.finish_reason === "length") throw new Error("The answer was cut off. Try fewer pages, or a model with a longer output limit.");
+    const c = ch.message && ch.message.content;
+    const text = Array.isArray(c) ? c.map(x => x.text || "").join("") : (c || "");
+    const usedModel = data.model && data.model !== model ? ` via ${data.model}` : "";
+    return { text, usage: (data.usage ? `${data.usage.total_tokens} tokens` : "") + usedModel };
+  },
+};
+async function srAiRead(canvases, onStep){
+  const prov = aiProv(), P = AI_PROVIDERS[prov], key = srKey(prov), model = srModel(prov);
+  if (!key && prov !== "custom") throw new Error(`Add your ${P.label.replace(/ \(.*\)$/, "")} API key first (Library → Sheet reading).`);
+  onStep && onStep(`Sending ${canvases.length} page${canvases.length > 1 ? "s" : ""} to ${P.label.replace(/ \(.*\)$/, "")}…`);
+  const { text, usage } = await AI_CALL[prov](canvases.map(c => srJpeg(c)), key, model);
+  let j; try { j = JSON.parse(srExtractJson(text)); } catch (e) { throw new Error(e.message.startsWith("The AI") ? e.message : "The AI's answer wasn't valid JSON. Try again, or try another model."); }
+  if (j.readable === false) throw new Error("The AI couldn't read drum notation here" + (j.notes ? ": " + j.notes : "."));
+  const beats = +j.beats_per_bar === 3 ? 3 : 4, spb = beats * 4, notes = [];
+  (Array.isArray(j.bars) ? j.bars : []).forEach((bar, bi) => ((bar && bar.hits) || []).forEach(hh => {
+    const s = Math.max(0, Math.min(spb - 1, Math.round(+hh.step || 0)));
+    (hh.drums || []).forEach(d => { const id = AI_TO_ID[String(d).toLowerCase()]; if (id && !notes.some(n => n.s === bi*spb + s && n.d === id)) notes.push({ s: bi*spb + s, d: id }); });
+  }));
+  return { title: j.title || "", bpm: j.bpm > 20 && j.bpm < 300 ? Math.round(j.bpm) : 0, beats, bars: Math.max(1, (j.bars || []).length), notes, report: j.notes || "", usage };
+}
+// Lists the models a key can use. Costs nothing, so it doubles as "Test key".
+async function srListModels(prov, key){
+  let r, ids = [];
+  if (prov === "anthropic") {
+    r = await srFetch("https://api.anthropic.com/v1/models?limit=100", { headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" } });
+    if (!r.ok) throw new Error(srApiError(r, prov));
+    ids = (JSON.parse(r.text).data || []).map(m => m.id);
+  } else if (prov === "gemini") {
+    r = await srFetch("https://generativelanguage.googleapis.com/v1beta/models?pageSize=200", { headers: { "x-goog-api-key": key } });
+    if (!r.ok) throw new Error(srApiError(r, prov));
+    ids = (JSON.parse(r.text).models || []).filter(m => (m.supportedGenerationMethods || []).includes("generateContent") && /gemini/.test(m.name) && !/tts|embedding|image-generation|live|audio/.test(m.name)).map(m => m.name.replace(/^models\//, ""));
+  } else {
+    const base = srBase(prov); if (!base) throw new Error("Enter the service's base URL first.");
+    r = await srFetch(base + "/models", { headers: key ? { authorization: "Bearer " + key } : {} });
+    if (!r.ok) throw new Error(srApiError(r, prov));
+    let list = JSON.parse(r.text).data || [];
+    if (prov === "openrouter") {
+      list = list.filter(m => !m.architecture || !m.architecture.input_modalities || m.architecture.input_modalities.includes("image"));
+      list.sort((a, b) => (/:free$/.test(b.id) - /:free$/.test(a.id)) || a.id.localeCompare(b.id));
+    }
+    ids = list.map(m => m.id);
+  }
+  return ids;
+}
 /* ============ Offline reader (optical music recognition) ============ */
 // Grayscale + adaptive threshold (Bradley): copes with uneven lighting in photos.
 function omrBinarize(c){
@@ -456,9 +537,10 @@ async function srOpen(file){
   } catch (e) { console.error(e); $("#srStatus").textContent = ""; $("#srErr").textContent = "Couldn't open that file: " + e.message; }
 }
 function srMethodHint(){
-  const m = $("#srMethod").value, k = !!srKey();
+  const m = $("#srMethod").value, prov = aiProv(), P = AI_PROVIDERS[prov], k = !!srKey(prov) || prov === "custom";
+  const name = P.label.replace(/ \(.*\)$/, "");
   $("#srHint").innerHTML = m === "ai"
-    ? (k ? `Uses <b>your</b> Anthropic API key and model ${esc(settings.ai.model)}. A few thousand tokens per page are charged to your account.` : `<span style="color:var(--amber)">No API key set.</span> Add one under Library → Sheet reading, or use the offline reader.`)
+    ? (k ? `Uses <b>your</b> ${esc(name)} key, model ${esc(srModel(prov))}. ${prov === "gemini" || /:free$|openrouter\/free/.test(srModel(prov)) ? "Free within the provider's limits." : "Charged to your account."}` : `<span style="color:var(--amber)">No ${esc(name)} key set.</span> Add one under Library → Sheet reading, or use the offline reader.`)
     : "Runs on this device, free. Best on clean printed sheets with simple rhythms; photos should be straight and evenly lit.";
   $("#srBeatsRow").hidden = m === "ai";
 }
@@ -486,28 +568,46 @@ async function srGo(){
 
 /* ============ settings card ============ */
 function srRenderSettings(){
-  const k = settings.ai.remember ? settings.ai.key : SR.sessionKey;
-  $("#aiKeyState").textContent = k ? (settings.ai.remember ? "Key saved on this device: ••••" + k.slice(-4) : "Key set for this session only: ••••" + k.slice(-4)) : "No key set: the free offline reader will be used.";
-  $("#aiRemember").checked = settings.ai.remember; $("#aiModel").value = settings.ai.model; $("#aiMethod").value = settings.ai.method;
+  const prov = aiProv(), P = AI_PROVIDERS[prov], k = srKey(prov);
+  $("#aiProvider").value = prov; $("#aiMethod").value = settings.ai.method; $("#aiRemember").checked = settings.ai.remember;
+  $("#aiKey").placeholder = P.keyHint; $("#aiKey").value = "";
+  $("#aiKeyState").textContent = k ? (settings.ai.remember ? "Key saved on this device: ••••" + k.slice(-4) : "Key set for this session only: ••••" + k.slice(-4)) : (prov === "custom" ? "No key set (some local servers don't need one)." : "No key set for this provider.");
+  $("#aiBaseRow").hidden = prov !== "custom"; $("#aiBase").value = settings.ai.baseUrl || "";
+  $("#aiModel").value = srModel(prov);
+  $("#aiModelList").innerHTML = P.models.map(([id, n]) => `<option value="${esc(id)}">${esc(n)}</option>`).join("");
+  $("#aiProvNote").textContent = P.note;
+  const link = $("#aiKeyLink"); link.hidden = !P.keyUrl; if (P.keyUrl) { link.href = P.keyUrl; link.textContent = "Get a " + P.label.replace(/ \(.*\)$/, "") + " key"; }
 }
+function srSetKey(prov, v){ if (settings.ai.remember) { settings.ai.keys[prov] = v; SR.sessionKeys[prov] = ""; } else { SR.sessionKeys[prov] = v; settings.ai.keys[prov] = ""; } }
 function srWire(){
-  const sel = $("#aiModel"); sel.innerHTML = AI_MODELS.map(([id, n]) => `<option value="${id}">${esc(n)}</option>`).join("");
+  $("#aiProvider").innerHTML = Object.entries(AI_PROVIDERS).map(([id, P]) => `<option value="${id}">${esc(P.label)}</option>`).join("");
+  $("#aiProvider").onchange = e => { settings.ai.provider = e.target.value; saveSettings(); srRenderSettings(); };
   $("#aiSave").onclick = () => {
-    const v = $("#aiKey").value.trim();
+    const v = $("#aiKey").value.trim(), prov = aiProv();
     if (!v) { toast("Paste your API key first"); return; }
-    if (!/^sk-ant-/.test(v)) toast("That doesn't look like an Anthropic key (they start with sk-ant-). Saved anyway.");
-    if (settings.ai.remember) { settings.ai.key = v; SR.sessionKey = ""; } else { SR.sessionKey = v; settings.ai.key = ""; }
-    saveSettings(); $("#aiKey").value = ""; srRenderSettings(); toast("API key saved");
+    srSetKey(prov, v); saveSettings(); srRenderSettings(); toast("API key saved");
   };
-  $("#aiRemove").onclick = () => { settings.ai.key = ""; SR.sessionKey = ""; saveSettings(); srRenderSettings(); toast("API key removed from this device"); };
-  $("#aiRemember").onchange = e => { const k = srKey(); settings.ai.remember = e.target.checked; if (settings.ai.remember) { settings.ai.key = k; SR.sessionKey = ""; } else { SR.sessionKey = k; settings.ai.key = ""; } saveSettings(); srRenderSettings(); };
-  $("#aiModel").onchange = e => { settings.ai.model = e.target.value; saveSettings(); };
+  $("#aiRemove").onclick = () => { const prov = aiProv(); settings.ai.keys[prov] = ""; SR.sessionKeys[prov] = ""; saveSettings(); srRenderSettings(); toast("API key removed from this device"); };
+  $("#aiRemember").onchange = e => {
+    const keep = {}; for (const p in AI_PROVIDERS) keep[p] = srKey(p);
+    settings.ai.remember = e.target.checked; for (const p in keep) srSetKey(p, keep[p]); saveSettings(); srRenderSettings();
+  };
+  $("#aiModel").onchange = e => { settings.ai.models[aiProv()] = e.target.value.trim(); saveSettings(); };
+  $("#aiBase").onchange = e => { settings.ai.baseUrl = e.target.value.trim(); saveSettings(); };
   $("#aiMethod").onchange = e => { settings.ai.method = e.target.value; saveSettings(); };
-  $("#aiTest").onclick = async () => {
-    const k = $("#aiKey").value.trim() || srKey(); if (!k) { toast("Paste or save a key first"); return; }
-    const b = $("#aiTest"); b.disabled = true; b.textContent = "Testing…";
-    try { await srTestKey(k); toast("The key works"); } catch (e) { toast(e.message); } finally { b.disabled = false; b.textContent = "Test key"; }
+  const listBtn = async (btn, label, ok) => {
+    const prov = aiProv(), k = $("#aiKey").value.trim() || srKey(prov);
+    if (!k && prov !== "custom") { toast("Paste or save a key first"); return; }
+    btn.disabled = true; btn.textContent = "Checking…";
+    try { const ids = await srListModels(prov, k); ok(ids); }
+    catch (e) { toast(e.message); } finally { btn.disabled = false; btn.textContent = label; }
   };
+  $("#aiTest").onclick = () => listBtn($("#aiTest"), "Test key", ids => toast(`The key works (${ids.length} models available)`));
+  $("#aiLoad").onclick = () => listBtn($("#aiLoad"), "Load models", ids => {
+    const P = AI_PROVIDERS[aiProv()], named = Object.fromEntries(P.models);
+    $("#aiModelList").innerHTML = ids.map(id => `<option value="${esc(id)}">${esc(named[id] || id)}</option>`).join("");
+    toast(`${ids.length} models loaded: click the Model box to pick one`);
+  });
   $("#srMethod").onchange = srMethodHint; $("#srGo").onclick = srGo; $("#srCancel").onclick = srClose;
   srRenderSettings();
 }

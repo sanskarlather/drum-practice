@@ -41,7 +41,7 @@ nav.main button[aria-current="page"]{background:#23262E;color:var(--text)}
 .toggle{display:inline-flex;align-items:center;gap:8px;font-size:13px;color:var(--soft);min-height:44px;padding:0 6px;cursor:pointer;user-select:none}
 .toggle input{width:18px;height:18px;accent-color:var(--amber)}
 input[type=range]{accent-color:var(--amber)}
-input[type=text],input[type=number],select{background:var(--btn);border:1px solid var(--line2);border-radius:10px;min-height:42px;padding:0 12px}
+input[type=text],input[type=number],input[type=password],input[type=search],select{background:var(--btn);border:1px solid var(--line2);border-radius:10px;min-height:42px;padding:0 12px}
 .muted{color:var(--muted)}
 .wrap{padding:16px 20px}
 h1,h2,h3{font-family:var(--head);margin:0;letter-spacing:-.01em}

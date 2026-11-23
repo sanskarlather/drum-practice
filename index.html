@@ -153,18 +153,25 @@
         <div class="eyebrow" style="margin-bottom:8px">Sheet reading</div>
         <p style="margin:0 0 10px;color:var(--soft);font-size:14px;line-height:1.55">PDFs and photos are read by one of two readers. Either way, the notes open in the editor so you can check them.</p>
         <ul style="margin:0 0 12px;padding-left:18px;color:var(--soft);font-size:13px;line-height:1.55">
-          <li><b>AI reader:</b> most accurate, handles photos. Uses <b>your own</b> Anthropic API key; reading is charged to your account.</li>
+          <li><b>AI reader:</b> most accurate, handles photos. Uses <b>your own</b> key from Google Gemini (free tier), OpenRouter (free models), Anthropic Claude or another service.</li>
           <li><b>Offline reader:</b> free and private. Best on clean, printed sheets with simple rhythms.</li>
         </ul>
         <label style="display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--muted);margin-bottom:10px">Which reader
           <select id="aiMethod"><option value="auto">AI if a key is set, otherwise offline</option><option value="ai">Always AI</option><option value="offline">Always offline</option></select></label>
-        <label style="display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--muted)">Your Anthropic API key
-          <input type="password" id="aiKey" autocomplete="off" spellcheck="false" placeholder="sk-ant-…"></label>
+        <label style="display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--muted);margin-bottom:8px">AI provider
+          <select id="aiProvider"></select></label>
+        <p id="aiProvNote" class="muted" style="font-size:12px;line-height:1.5;margin:0 0 8px"></p>
+        <label id="aiBaseRow" style="display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--muted);margin-bottom:8px">Base URL
+          <input type="text" id="aiBase" spellcheck="false" placeholder="https://api.openai.com/v1"></label>
+        <label style="display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--muted)">Your API key
+          <input type="password" id="aiKey" autocomplete="off" spellcheck="false"></label>
         <p id="aiKeyState" class="muted" style="font-size:12px;margin:6px 0"></p>
-        <label class="toggle" style="min-height:36px"><input type="checkbox" id="aiRemember">Remember the key on this device</label>
+        <label class="toggle" style="min-height:36px"><input type="checkbox" id="aiRemember">Remember keys on this device</label>
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin:6px 0 10px"><button class="btn primary" type="button" id="aiSave">Save key</button><button class="btn" type="button" id="aiTest">Test key</button><button class="btn danger" type="button" id="aiRemove">Remove</button></div>
-        <label style="display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--muted)">Model<select id="aiModel"></select></label>
-        <p class="muted" style="font-size:12px;line-height:1.5;margin:10px 0 0">Get a key at <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">console.anthropic.com</a> and set a monthly spend limit there. The key is stored only in this browser, is sent only to Anthropic, and is never part of the app or its GitHub repository. Anyone else using the app needs their own key.</p>
+        <label style="display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--muted)">Model
+          <div style="display:flex;gap:8px"><input type="text" id="aiModel" list="aiModelList" spellcheck="false" style="flex:1;min-width:0"><button class="btn" type="button" id="aiLoad">Load models</button></div></label>
+        <datalist id="aiModelList"></datalist>
+        <p class="muted" style="font-size:12px;line-height:1.5;margin:10px 0 0"><a id="aiKeyLink" target="_blank" rel="noopener"></a><br>Keys are stored only in this browser, sent only to the provider you chose, and never part of the app or its GitHub repository. Anyone else using the app adds their own key.</p>
       </div>
     </aside>
   </div>
@@ -300,7 +307,7 @@
     <div id="srPreview" class="sr-preview"></div>
     <p id="srStatus" class="muted" style="font-size:13px;margin:8px 0"></p>
     <label style="display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--muted)">Reader
-      <select id="srMethod"><option value="ai">AI reader (your API key)</option><option value="offline">Offline reader (free)</option></select></label>
+      <select id="srMethod"><option value="ai">AI reader (your own key)</option><option value="offline">Offline reader (free)</option></select></label>
     <p id="srHint" style="font-size:13px;color:var(--soft);line-height:1.5;margin:8px 0"></p>
     <label id="srBeatsRow" style="display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--muted)">Time signature
       <select id="srBeats"><option value="4">4/4</option><option value="3">3/4</option></select></label>

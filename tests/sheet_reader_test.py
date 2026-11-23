@@ -83,19 +83,45 @@ async def main():
         r = await pg.evaluate("({title:ED.title, bars:ED.bars, n:ED.notes.length, want:LESSONS[4].notes.length*2, ok: LESSONS[4].notes.every(n=>ED.notes.some(m=>m.s===n.s&&m.d===n.d)) && LESSONS[4].notes.every(n=>ED.notes.some(m=>m.s===n.s+32&&m.d===n.d))})")
         check("PDF import with the offline reader", r["ok"] and r["bars"] == 4, str(r))
 
-        # 3) AI reader with a mocked API: checks the request we send and that the answer is turned into notes
-        await pg.evaluate("""()=>{ settings.ai.key='sk-ant-test'; settings.ai.remember=true; window.__req=null;
-          window.fetch = async (url, o) => { window.__req = {url, headers:o.headers, body: JSON.parse(o.body)};
-            const ans = {readable:true,title:"Test groove",bpm:92,beats_per_bar:4,bars:[{hits:[{step:0,drums:["kick","hihat"]},{step:4,drums:["snare","hihat"]}]},{hits:[{step:8,drums:["floor_tom"]},{step:12,drums:["crash","hihat_pedal"]}]}],notes:"Bar 2 has a triplet, rounded."};
-            return new Response(JSON.stringify({content:[{type:"text",text:JSON.stringify(ans)}],stop_reason:"end_turn",usage:{input_tokens:2400,output_tokens:180}}),{status:200}); }; }""")
+        # 3) AI reader with a stand-in for each provider's API: checks the request we send and that the answer becomes notes
+        ans = {"readable": True, "title": "Test groove", "bpm": 92, "beats_per_bar": 4, "bars": [{"hits": [{"step": 0, "drums": ["kick", "hihat"]}, {"step": 4, "drums": ["snare", "hihat"]}]}, {"hits": [{"step": 8, "drums": ["floor_tom"]}, {"step": 12, "drums": ["crash", "hihat_pedal"]}]}], "notes": ""}
+        replies = {
+          "anthropic": {"content": [{"type": "text", "text": json.dumps(ans)}], "stop_reason": "end_turn", "usage": {"input_tokens": 2400, "output_tokens": 180}},
+          "gemini": {"candidates": [{"content": {"parts": [{"text": json.dumps(ans)}]}, "finishReason": "STOP"}], "usageMetadata": {"totalTokenCount": 2600}},
+          "openrouter": {"choices": [{"message": {"content": "```json\n" + json.dumps(ans) + "\n```"}, "finish_reason": "stop"}], "model": "some/vision-model:free", "usage": {"total_tokens": 2500}},
+          "custom": {"choices": [{"message": {"content": json.dumps(ans)}, "finish_reason": "stop"}], "usage": {"total_tokens": 2500}},
+        }
+        for prov in ["gemini", "openrouter", "anthropic", "custom"]:
+            await pg.evaluate("""([prov, reply]) => { settings.ai.provider = prov; settings.ai.remember = true; settings.ai.keys[prov] = 'test-key-' + prov;
+              if (prov === 'custom') { settings.ai.baseUrl = 'https://llm.example.test/v1'; settings.ai.models.custom = 'vision-model'; }
+              window.__req = null; window.fetch = async (url, o) => { window.__req = {url, headers: o.headers, body: JSON.parse(o.body)}; return new Response(JSON.stringify(reply), {status: 200}); }; }""", [prov, replies[prov]])
+            await pg.set_input_files("#fileIn", PDF)
+            await pg.wait_for_function("!document.querySelector('#srGo').disabled", timeout=20000)
+            await pg.select_option("#srMethod", "ai"); await pg.click("#srGo")
+            await pg.wait_for_function("document.querySelector('#srDialog').hidden", timeout=20000)
+            r = await pg.evaluate("""()=>{ const b = __req.body; const imgs = JSON.stringify(b).split('/9j/').length - 1;
+              return {title: ED.title, bpm: ED.bpm, notes: ED.notes, url: __req.url, h: __req.headers, imgs,
+                      model: b.model || __req.url.split('/models/')[1]}; }""")
+            want = {"anthropic": "https://api.anthropic.com/v1/messages", "gemini": "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent",
+                    "openrouter": "https://openrouter.ai/api/v1/chat/completions", "custom": "https://llm.example.test/v1/chat/completions"}[prov]
+            keyh = {"anthropic": ("x-api-key", "test-key-anthropic"), "gemini": ("x-goog-api-key", "test-key-gemini"),
+                    "openrouter": ("authorization", "Bearer test-key-openrouter"), "custom": ("authorization", "Bearer test-key-custom")}[prov]
+            check(f"{prov}: request goes to the right endpoint with the user's key", r["url"] == want and r["h"].get(keyh[0]) == keyh[1], r["url"])
+            check(f"{prov}: key is not in the URL", "test-key" not in r["url"])
+            check(f"{prov}: page image is sent", r["imgs"] >= 1)
+            check(f"{prov}: answer becomes notes", r["title"] == "Test groove" and r["bpm"] == 92 and {"s": 24, "d": "floor"} in r["notes"] and {"s": 28, "d": "hhp"} in r["notes"], json.dumps(r["notes"]))
+        # model list (used by Test key / Load models) for Gemini
+        await pg.evaluate("""()=>{ window.fetch = async (url, o) => new Response(JSON.stringify({models:[{name:'models/gemini-3.8-flash',supportedGenerationMethods:['generateContent']},{name:'models/gemini-3.8-flash-tts',supportedGenerationMethods:['generateContent']},{name:'models/text-embedding-9',supportedGenerationMethods:['embedContent']}]}),{status:200}); }""")
+        ids = await pg.evaluate("srListModels('gemini','k')")
+        check("Gemini model list keeps usable models only", ids == ["gemini-3.8-flash"], str(ids))
+        # Gemini free-tier limit message
+        await pg.evaluate("window.fetch = async ()=> new Response(JSON.stringify({error:{code:429,message:'Resource has been exhausted',status:'RESOURCE_EXHAUSTED'}}),{status:429}); settings.ai.provider='gemini'")
         await pg.set_input_files("#fileIn", PDF)
         await pg.wait_for_function("!document.querySelector('#srGo').disabled", timeout=20000)
-        await pg.select_option("#srMethod", "ai"); await pg.click("#srGo")
-        await pg.wait_for_function("document.querySelector('#srDialog').hidden", timeout=20000)
-        r = await pg.evaluate("""()=>({title:ED.title,bpm:ED.bpm,notes:ED.notes, url:__req.url, h:__req.headers, model:__req.body.model, imgs:__req.body.messages[0].content.filter(c=>c.type==='image').length, schema: !!__req.body.output_config})""")
-        check("AI request: correct endpoint and headers", r["url"] == "https://api.anthropic.com/v1/messages" and r["h"].get("anthropic-dangerous-direct-browser-access") == "true" and r["h"].get("x-api-key") == "sk-ant-test")
-        check("AI request: page sent as an image with a JSON schema", r["imgs"] == 1 and r["schema"])
-        check("AI answer becomes notes", r["title"] == "Test groove" and r["bpm"] == 92 and {"s": 24, "d": "floor"} in r["notes"] and {"s": 28, "d": "hhp"} in r["notes"], json.dumps(r["notes"]))
+        await pg.select_option("#srMethod", "ai"); await pg.click("#srGo"); await pg.wait_for_timeout(800)
+        msg = await pg.inner_text("#srErr"); check("Gemini free-tier limit gives a clear message", "free-tier limit" in msg, msg)
+        await pg.click("#srCancel")
+        await pg.evaluate("settings.ai.provider='anthropic'")
         # 4) error handling: 401
         await pg.evaluate("window.fetch = async ()=> new Response(JSON.stringify({type:'error',error:{type:'authentication_error',message:'invalid x-api-key'}}),{status:401})")
         await pg.set_input_files("#fileIn", PDF)

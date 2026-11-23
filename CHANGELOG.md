@@ -2,6 +2,13 @@
 
 All notable changes to this project. Dates are YYYY-MM-DD.
 
+## [0.3.1] - 2026-11-23
+### Added
+- AI sheet reader works with **Google Gemini** (free tier, now the default), **OpenRouter** (free models), **Anthropic Claude**, or any **OpenAI-compatible** service (OpenAI, Groq, Mistral, local LM Studio/Ollama). Each uses the user's own key, stored per provider in their browser.
+- **Load models** lists the models your key can use; **Test key** no longer costs anything.
+### Fixed
+- Password fields now match the dark theme.
+
 ## [0.3.0] - 2026-11-23
 ### Added
 - Automatic reading of PDF and photo sheet music:
