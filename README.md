@@ -56,7 +56,7 @@ It runs entirely in the browser: there is no server or account, and nothing you 
 **Music**
 - 10 built-in beginner lessons, from "hi-hat only" to fills around the toms.
 - Import **MIDI** (`.mid`) and **MusicXML** (`.musicxml`, `.xml`) files.
-- **Read a PDF or photo of drum sheet music automatically**, with the AI reader (your own key from Google Gemini, OpenRouter, Anthropic Claude or any OpenAI-compatible service; Gemini and OpenRouter have free options) or the free offline reader.
+- **Read a PDF or photo of drum sheet music automatically**, with the AI reader (your own key from Google Gemini, Groq, OpenRouter, Anthropic Claude or any OpenAI-compatible service; Gemini, Groq and OpenRouter have free options, and a local Ollama/LM Studio model is free and private) or the free offline reader.
 - A **note editor**: click a grid, or **record from your kit** after a count-in.
 - Your songs and best scores are saved in your browser.
 
@@ -113,7 +113,7 @@ In **Library**, choose **PDF or photo** (or drop the file on the page). The app 
 |---|---|---|
 | How it works | Sends the page images to an AI model from the provider you choose | Optical music recognition, in your browser |
 | Accuracy | Best; handles photos, repeats, most notation (depends on the model) | Good on clean printed sheets with simple rhythms |
-| Cost | Free within Gemini's free tier or OpenRouter's free models; otherwise charged to **your own** account | Free |
+| Cost | Free within Gemini's free tier, Groq's free plan or OpenRouter's free models; otherwise charged to **your own** account | Free |
 | Privacy | Pages are sent to that provider | Nothing leaves your device |
 | Needs | An API key and internet | Nothing |
 
@@ -122,11 +122,14 @@ In **Library**, choose **PDF or photo** (or drop the file on the page). The app 
 | Provider | Cost | Get a key |
 |---|---|---|
 | **Google Gemini** (default) | Free tier, no payment needed; limited requests per day. On the free tier Google may use what you send to improve its products. | [aistudio.google.com/apikey](https://aistudio.google.com/apikey) |
-| **OpenRouter** | Free models (ending in `:free`, or the `openrouter/free` router) with daily limits; paid models too | [openrouter.ai/settings/keys](https://openrouter.ai/settings/keys) |
+| **Groq** | Free plan with rate limits; very fast. Vision models: Llama 4 Scout (default), Qwen 3.8 27B | [console.groq.com/keys](https://console.groq.com/keys) |
+| **OpenRouter** | Free models (ending in `:free`, or the `openrouter/free` router, which picks a random one) with daily limits; paid models too | [openrouter.ai/settings/keys](https://openrouter.ai/settings/keys) |
 | **Anthropic Claude** | Needs prepaid API credit | [console.anthropic.com](https://console.anthropic.com/settings/keys) |
-| **Other OpenAI-compatible** | Depends on the service (OpenAI, Groq, Mistral, a local LM Studio or Ollama server…) | From that service; enter its base URL too |
+| **Other OpenAI-compatible** | Depends on the service. A local **Ollama** or **LM Studio** server with a vision model is free and private (runs on your computer) | From that service; enter its base URL too |
 
 **Your own API key.** The AI reader never uses a key built into the app: there isn't one. Each person who wants it pastes their own key. It's stored only in that browser (or for the current session only, if you untick *Remember*), sent only to the provider you chose, and never part of this repository. So nobody using your copy of the app can run up charges on your account. **Test key** and **Load models** only list the models your key can use, which costs nothing. Without a key, the app uses the offline reader.
+
+**How the AI is asked:** each page is sent on its own, and the AI answers in compact drum-tab lines (`HH x.x.x.x.x.x.x.x.`), one per drum per bar. That keeps answers short, so they fit within free models' output limits; "thinking" is kept low where the provider allows. If one provider is busy or at its free limit, the app waits and retries once; you can also switch provider and press **Read again**.
 
 The offline reader marks what it found on the page (circles around notes, blue barlines, bar numbers), so you can spot mistakes quickly. Either way, always check the result before practising.
 

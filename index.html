@@ -153,7 +153,7 @@
         <div class="eyebrow" style="margin-bottom:8px">Sheet reading</div>
         <p style="margin:0 0 10px;color:var(--soft);font-size:14px;line-height:1.55">PDFs and photos are read by one of two readers. Either way, the notes open in the editor so you can check them.</p>
         <ul style="margin:0 0 12px;padding-left:18px;color:var(--soft);font-size:13px;line-height:1.55">
-          <li><b>AI reader:</b> most accurate, handles photos. Uses <b>your own</b> key from Google Gemini (free tier), OpenRouter (free models), Anthropic Claude or another service.</li>
+          <li><b>AI reader:</b> most accurate, handles photos. Uses <b>your own</b> key from Google Gemini (free tier), Groq (free plan), OpenRouter (free models), Anthropic Claude or another service.</li>
           <li><b>Offline reader:</b> free and private. Best on clean, printed sheets with simple rhythms.</li>
         </ul>
         <label style="display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--muted);margin-bottom:10px">Which reader
@@ -309,7 +309,7 @@
     <label style="display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--muted)">Reader
       <select id="srMethod"><option value="ai">AI reader (your own key)</option><option value="offline">Offline reader (free)</option></select></label>
     <p id="srHint" style="font-size:13px;color:var(--soft);line-height:1.5;margin:8px 0"></p>
-    <label id="srBeatsRow" style="display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--muted)">Time signature
+    <label id="srBeatsRow" style="display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--muted)">Time signature (the AI reader also reads it from the sheet)
       <select id="srBeats"><option value="4">4/4</option><option value="3">3/4</option></select></label>
     <p id="srErr" role="alert" style="color:#FF8A84;font-size:14px;margin:10px 0 0;line-height:1.5"></p>
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px"><button class="btn" type="button" id="srCancel">Cancel</button><button class="btn primary" type="button" id="srGo">Read notes</button></div>

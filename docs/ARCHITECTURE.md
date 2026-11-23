@@ -173,14 +173,18 @@ To compare against **several drums at once** (e.g. kick + hi-hat), the taught ba
 ### AI reader
 - Pages are downscaled to 1568 px on the long edge, JPEG-encoded, and sent in one request, straight from the browser, to the provider chosen in `settings.ai.provider`. `AI_PROVIDERS` lists the providers; `AI_CALL` has one function per provider:
 
-| Provider | Endpoint | Key header | JSON output |
+| Provider | Endpoint | Key header | Notes |
 |---|---|---|---|
-| `gemini` | `generativelanguage.googleapis.com/v1beta/models/{model}:generateContent` | `x-goog-api-key` | `generationConfig.responseJsonSchema` |
-| `anthropic` | `api.anthropic.com/v1/messages` (+ `anthropic-dangerous-direct-browser-access`) | `x-api-key` | `output_config.format` |
-| `openrouter` | `openrouter.ai/api/v1/chat/completions` | `Authorization: Bearer` | prompt asks for JSON |
-| `custom` | `{base URL}/chat/completions` (OpenAI-compatible) | `Authorization: Bearer` (if a key is set) | prompt asks for JSON |
+| `gemini` | `generativelanguage.googleapis.com/v1beta/models/{model}:generateContent` | `x-goog-api-key` | `thinkingConfig.thinkingLevel: low` |
+| `anthropic` | `api.anthropic.com/v1/messages` (+ `anthropic-dangerous-direct-browser-access`) | `x-api-key` | |
+| `groq` | `api.groq.com/openai/v1/chat/completions` | `Authorization: Bearer` | |
+| `openrouter` | `openrouter.ai/api/v1/chat/completions` (+ `reasoning: {effort: "low", exclude: true}`) | `Authorization: Bearer` | |
+| `custom` | `{base URL}/chat/completions` (OpenAI-compatible) | `Authorization: Bearer` (if a key is set) | |
 
-- Keys always go in headers, never in the URL. If a provider rejects the JSON-schema option, the request is retried asking for plain JSON in the prompt. Answers are parsed with code fences stripped.
+- **One page per request**, and the answer is **compact drum tab**, not JSON: `BAR n` lines followed by one line per drum, e.g. `HH x.x.x.x.x.x.x.x.` (a code, then one character per 16th note). A full page is a few hundred tokens instead of thousands, which fits free models' output limits. `srParseTab()` tolerates small slips: dashes for rests, `|` bar marks, missing `BAR` lines, and lines with 4 or 8 characters (stretched to the bar).
+- "Thinking" shares the output budget on many providers, so it's kept low (`thinkingLevel: low` on Gemini, `reasoning.effort: low` on OpenRouter). If a model rejects that option, the request is retried without it. If an answer is cut off, the bars read so far are kept and the user is told to check the end. If nothing was written, the message explains that the model spent its budget thinking.
+- On 429 (rate limit) the app waits 20 s and retries once; on 500/503 it waits 5 s and retries once.
+- Keys always go in headers, never in the URL. A key pasted under the wrong provider is recognised by its prefix (`AIza`, `gsk_`, `sk-or-`, `sk-ant-`) and the provider is switched.
 - **Keys are the user's own**, kept per provider in `settings.ai.keys` (localStorage) or in memory for the session only (`SR.sessionKeys`). No key exists in the code.
 - `srListModels()` calls each provider's model-list endpoint. It backs **Test key** and **Load models** and costs nothing.
 - The prompt asks for every bar written out on a 16th-note grid (repeats expanded), with standard drum-notation positions and any legend on the page taking priority.

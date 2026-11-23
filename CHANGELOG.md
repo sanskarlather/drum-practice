@@ -2,6 +2,15 @@
 
 All notable changes to this project. Dates are YYYY-MM-DD.
 
+## [0.3.2] - 2026-11-23
+### Fixed
+- AI reader answers were too long for free models ("answer was cut off"). The AI now answers in compact drum-tab lines, one page per request, with "thinking" kept low; partial answers are kept instead of failing.
+### Added
+- **Groq** (free plan) as a provider, with its vision models suggested.
+- Automatic wait-and-retry when a provider is busy or at its free per-minute limit.
+- A key pasted under the wrong provider switches to the right provider.
+- **Load models** on OpenRouter lists free vision models first, and those that don't require reasoning before those that do.
+
 ## [0.3.1] - 2026-11-23
 ### Added
 - AI sheet reader works with **Google Gemini** (free tier, now the default), **OpenRouter** (free models), **Anthropic Claude**, or any **OpenAI-compatible** service (OpenAI, Groq, Mistral, local LM Studio/Ollama). Each uses the user's own key, stored per provider in their browser.

@@ -84,14 +84,17 @@ async def main():
         check("PDF import with the offline reader", r["ok"] and r["bars"] == 4, str(r))
 
         # 3) AI reader with a stand-in for each provider's API: checks the request we send and that the answer becomes notes
-        ans = {"readable": True, "title": "Test groove", "bpm": 92, "beats_per_bar": 4, "bars": [{"hits": [{"step": 0, "drums": ["kick", "hihat"]}, {"step": 4, "drums": ["snare", "hihat"]}]}, {"hits": [{"step": 8, "drums": ["floor_tom"]}, {"step": 12, "drums": ["crash", "hihat_pedal"]}]}], "notes": ""}
+        tab = "TITLE: Test groove\nTEMPO: 92\nTIME: 4/4\nBAR 1\nHH x...x...........\nSD ....x...........\nBD x...............\nBAR 2\nFT ........x.......\nCR ............x...\nHP ............x...\nNOTES:"
+        tab = tab.replace("HH x...x...........", "HH x...x.........")  # 16 cells
+        tab = tab.replace("SD ....x...........", "SD ....x...........".replace("...........", "..........."))
         replies = {
-          "anthropic": {"content": [{"type": "text", "text": json.dumps(ans)}], "stop_reason": "end_turn", "usage": {"input_tokens": 2400, "output_tokens": 180}},
-          "gemini": {"candidates": [{"content": {"parts": [{"text": json.dumps(ans)}]}, "finishReason": "STOP"}], "usageMetadata": {"totalTokenCount": 2600}},
-          "openrouter": {"choices": [{"message": {"content": "```json\n" + json.dumps(ans) + "\n```"}, "finish_reason": "stop"}], "model": "some/vision-model:free", "usage": {"total_tokens": 2500}},
-          "custom": {"choices": [{"message": {"content": json.dumps(ans)}, "finish_reason": "stop"}], "usage": {"total_tokens": 2500}},
+          "anthropic": {"content": [{"type": "text", "text": tab}], "stop_reason": "end_turn", "usage": {"input_tokens": 2400, "output_tokens": 180}},
+          "gemini": {"candidates": [{"content": {"parts": [{"text": "thinking...", "thought": True}, {"text": tab}]}, "finishReason": "STOP"}], "usageMetadata": {"totalTokenCount": 2600}},
+          "openrouter": {"choices": [{"message": {"content": "```\n" + tab + "\n```"}, "finish_reason": "stop"}], "model": "some/vision-model:free", "usage": {"total_tokens": 2500}},
+          "groq": {"choices": [{"message": {"content": tab}, "finish_reason": "stop"}], "usage": {"total_tokens": 2500}},
+          "custom": {"choices": [{"message": {"content": tab}, "finish_reason": "stop"}], "usage": {"total_tokens": 2500}},
         }
-        for prov in ["gemini", "openrouter", "anthropic", "custom"]:
+        for prov in ["gemini", "groq", "openrouter", "anthropic", "custom"]:
             await pg.evaluate("""([prov, reply]) => { settings.ai.provider = prov; settings.ai.remember = true; settings.ai.keys[prov] = 'test-key-' + prov;
               if (prov === 'custom') { settings.ai.baseUrl = 'https://llm.example.test/v1'; settings.ai.models.custom = 'vision-model'; }
               window.__req = null; window.fetch = async (url, o) => { window.__req = {url, headers: o.headers, body: JSON.parse(o.body)}; return new Response(JSON.stringify(reply), {status: 200}); }; }""", [prov, replies[prov]])
@@ -99,17 +102,51 @@ async def main():
             await pg.wait_for_function("!document.querySelector('#srGo').disabled", timeout=20000)
             await pg.select_option("#srMethod", "ai"); await pg.click("#srGo")
             await pg.wait_for_function("document.querySelector('#srDialog').hidden", timeout=20000)
+            if prov == "openrouter":
+                check("openrouter: asks for low reasoning so thinking doesn't eat the answer", await pg.evaluate("__req.body.reasoning && __req.body.reasoning.effort === 'low'"))
             r = await pg.evaluate("""()=>{ const b = __req.body; const imgs = JSON.stringify(b).split('/9j/').length - 1;
               return {title: ED.title, bpm: ED.bpm, notes: ED.notes, url: __req.url, h: __req.headers, imgs,
                       model: b.model || __req.url.split('/models/')[1]}; }""")
             want = {"anthropic": "https://api.anthropic.com/v1/messages", "gemini": "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent",
-                    "openrouter": "https://openrouter.ai/api/v1/chat/completions", "custom": "https://llm.example.test/v1/chat/completions"}[prov]
+                    "openrouter": "https://openrouter.ai/api/v1/chat/completions", "groq": "https://api.groq.com/openai/v1/chat/completions", "custom": "https://llm.example.test/v1/chat/completions"}[prov]
             keyh = {"anthropic": ("x-api-key", "test-key-anthropic"), "gemini": ("x-goog-api-key", "test-key-gemini"),
-                    "openrouter": ("authorization", "Bearer test-key-openrouter"), "custom": ("authorization", "Bearer test-key-custom")}[prov]
+                    "openrouter": ("authorization", "Bearer test-key-openrouter"), "groq": ("authorization", "Bearer test-key-groq"), "custom": ("authorization", "Bearer test-key-custom")}[prov]
             check(f"{prov}: request goes to the right endpoint with the user's key", r["url"] == want and r["h"].get(keyh[0]) == keyh[1], r["url"])
             check(f"{prov}: key is not in the URL", "test-key" not in r["url"])
             check(f"{prov}: page image is sent", r["imgs"] >= 1)
             check(f"{prov}: answer becomes notes", r["title"] == "Test groove" and r["bpm"] == 92 and {"s": 24, "d": "floor"} in r["notes"] and {"s": 28, "d": "hhp"} in r["notes"], json.dumps(r["notes"]))
+        # drum-tab parser edge cases
+        r = await pg.evaluate(r"""()=>{
+          const a = srParseTab("BAR 1\nHH | x-x-x-x- |\nBD x.......x.......", 4);         // 8 cells = 8th notes, dashes and bars
+          const b = srParseTab("HH x.x.x.x.x.x.x.x.\nSD ....x.......x...", 4);           // no BAR line
+          const c = srParseTab("UNREADABLE: this is a photo of a cat", 4);
+          const d = srParseTab("TIME: 3/4\nBAR 1\nBD x...x...x...", 4);
+          return { a: srTabNotes(a, 0), b: srTabNotes(b, 0).length, c: c.unreadable, d: [d.beats, srTabNotes(d, 0).map(n=>n.s)] };
+        }""")
+        check("tab parser: short lines with dashes and bar marks are stretched to the bar", [n["s"] for n in r["a"] if n["d"] == "hihat"] == [0, 4, 8, 12] and {"s": 8, "d": "kick"} in r["a"], json.dumps(r["a"]))
+        check("tab parser: lines without a BAR header", r["b"] == 10, str(r["b"]))
+        check("tab parser: unreadable answer", "cat" in (r["c"] or ""))
+        check("tab parser: 3/4 bars", r["d"] == [3, [0, 4, 8]], str(r["d"]))
+        # answer cut off with nothing written (a model that only "thought")
+        await pg.evaluate("""()=>{ settings.ai.provider='openrouter'; settings.ai.keys.openrouter='k';
+          window.fetch = async () => new Response(JSON.stringify({choices:[{message:{content:""},finish_reason:"length"}]}),{status:200}); }""")
+        await pg.set_input_files("#fileIn", PDF)
+        await pg.wait_for_function("!document.querySelector('#srGo').disabled", timeout=20000)
+        await pg.select_option("#srMethod", "ai"); await pg.click("#srGo"); await pg.wait_for_timeout(800)
+        msg = await pg.inner_text("#srErr"); check("cut-off answer explains the thinking limit", "answer limit" in msg, msg)
+        await pg.click("#srCancel")
+        # a provider rejecting the reasoning option is retried without it
+        await pg.evaluate(r"""()=>{ window.__n=0; window.__bodies=[]; window.fetch = async (u,o) => { __n++; __bodies.push(JSON.parse(o.body));
+            if (__n===1) return new Response(JSON.stringify({error:{code:400,message:"reasoning is not supported"}}),{status:400});
+            return new Response(JSON.stringify({choices:[{message:{content:"BAR 1\nBD x..............."},finish_reason:"stop"}]}),{status:200}); }; }""")
+        res = await pg.evaluate("srAiRead([document.createElement('canvas')], null, 4).then(r=>({n:r.notes.length, retried: __n, second: !!__bodies[1].reasoning}))")
+        check("retries without the reasoning option when a model rejects it", res == {"n": 1, "retried": 2, "second": False}, str(res))
+        # key pasted under the wrong provider
+        await pg.evaluate("settings.ai.provider='openrouter'; srRenderSettings()")
+        await pg.click("nav.main button[data-view=library]")
+        await pg.fill("#aiKey", "AIzaFakeKeyForTest"); await pg.click("#aiSave")
+        check("a Gemini key pasted under another provider switches to Gemini", await pg.evaluate("settings.ai.provider") == "gemini")
+        await pg.click("nav.main button[data-view=practice]")
         # model list (used by Test key / Load models) for Gemini
         await pg.evaluate("""()=>{ window.fetch = async (url, o) => new Response(JSON.stringify({models:[{name:'models/gemini-3.8-flash',supportedGenerationMethods:['generateContent']},{name:'models/gemini-3.8-flash-tts',supportedGenerationMethods:['generateContent']},{name:'models/text-embedding-9',supportedGenerationMethods:['embedContent']}]}),{status:200}); }""")
         ids = await pg.evaluate("srListModels('gemini','k')")
@@ -118,7 +155,10 @@ async def main():
         await pg.evaluate("window.fetch = async ()=> new Response(JSON.stringify({error:{code:429,message:'Resource has been exhausted',status:'RESOURCE_EXHAUSTED'}}),{status:429}); settings.ai.provider='gemini'")
         await pg.set_input_files("#fileIn", PDF)
         await pg.wait_for_function("!document.querySelector('#srGo').disabled", timeout=20000)
-        await pg.select_option("#srMethod", "ai"); await pg.click("#srGo"); await pg.wait_for_timeout(800)
+        await pg.select_option("#srMethod", "ai"); await pg.click("#srGo")
+        await pg.wait_for_timeout(1500); waiting = await pg.inner_text("#srStatus")
+        check("free-tier limit: waits and retries automatically", "waiting 20 seconds" in waiting, waiting)
+        await pg.wait_for_function("document.querySelector('#srErr').textContent.length > 0", timeout=40000)
         msg = await pg.inner_text("#srErr"); check("Gemini free-tier limit gives a clear message", "free-tier limit" in msg, msg)
         await pg.click("#srCancel")
         await pg.evaluate("settings.ai.provider='anthropic'")

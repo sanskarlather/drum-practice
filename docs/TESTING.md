@@ -23,7 +23,7 @@ Both matter. Passing automated tests does **not** mean the app works well with y
 | Mic detection | 42 synthesised kick/snare/hi-hat hits, including hi-hats right after kicks, fed in as a fake microphone | Passed: 42/42 detected, 0 false hits, 18/18 single drums identified, 24/24 combinations accepted, 3/3 wrong drums rejected, timing within ~1 ms (AudioWorklet) and ~10 ms (file:// fallback) |
 | Offline sheet reader | All 10 lessons drawn as printed notation on one page, read back and compared note by note | Clean page: 198/198 notes, 0 wrong. Rotated 1.5°, blurred, unevenly lit: 197/198, 0 wrong. Smaller print (1000 px page): 198/198 |
 | PDF import | `samples/rock-beat-sheet.pdf` through the Library with PDF.js and the offline reader | Passed: 48/48 notes, 4 bars |
-| AI sheet reader | With **stand-ins** for the Gemini, OpenRouter, Claude and an OpenAI-compatible API: endpoint, key in a header (never the URL), image sent; answer → notes; Gemini model list filtering; free-tier limit and rejected key → clear messages | Passed (19 checks). **Not tested against any real API** (no keys during development) |
+| AI sheet reader | With **stand-ins** for the Gemini, Groq, OpenRouter, Claude and an OpenAI-compatible API: endpoint, key in a header (never the URL), image sent, low reasoning on OpenRouter; drum-tab answers → notes (incl. dashes, bar marks, short lines, 3/4, no BAR line, unreadable); cut-off answer, retry without reasoning, wrong-provider key, Gemini model filtering, free-tier wait-and-retry, rejected key | Passed (33 checks). **Not tested against any real API** (no keys during development) |
 | Kits | Presets; add tom/crash/kick; MIDI note moves to the new crash; second kick = left foot; drag a piece; per-kit pad mapping; fallback (tom2 → tom1 on a small kit); survives reload; remove a piece; big kit practice | Passed (14 checks) |
 | Layout | Desktop (1440 px) and phone (390 px) screenshots checked by eye | Passed |
 | Console | No JavaScript errors on any screen | Passed |
@@ -98,6 +98,7 @@ Work through this on your own hardware, then tick each item (edit this file on G
 - [ ] The overlay on the sheet shows what was read, and mistakes are easy to spot
 - [ ] Gemini (free): Save key → Test key says it works
 - [ ] Gemini: the same PDF and photo (score: ___ / ___ notes)
+- [ ] Groq (free): the same PDF (score: ___ / ___ notes)
 - [ ] OpenRouter with a free vision model: the same PDF (score: ___ / ___ notes; model used: ______)
 - [ ] Load models shows a sensible list for each provider you tried
 - [ ] AI reader: a page with repeat signs is written out in full

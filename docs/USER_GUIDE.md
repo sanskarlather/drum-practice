@@ -117,9 +117,10 @@ Imported songs always open in the editor first, so you can check them.
 **Setting up the AI reader (Library → Sheet reading):**
 1. Pick an **AI provider**:
    - **Google Gemini** (the default): free tier, no payment needed. Sign in at [aistudio.google.com/apikey](https://aistudio.google.com/apikey) with a Google account and press *Create API key*. The free tier has daily limits, and Google may use free-tier requests to improve its products.
+   - **Groq**: free plan, very fast. Create a key at [console.groq.com/keys](https://console.groq.com/keys). Use the suggested vision model (Llama 4 Scout).
    - **OpenRouter**: one key for many models, including free ones. Create a key at [openrouter.ai/settings/keys](https://openrouter.ai/settings/keys). The default model `openrouter/free` picks a free model for you; for steadier results press **Load models** and choose a specific vision model (free ones end in `:free`).
    - **Anthropic Claude**: needs prepaid credit. Key from [console.anthropic.com](https://console.anthropic.com/settings/keys).
-   - **Other OpenAI-compatible service**: enter its **Base URL** (for example `https://api.openai.com/v1`, or `http://localhost:1234/v1` for LM Studio), a key if it needs one, and a model that can read images.
+   - **Other OpenAI-compatible service**: enter its **Base URL** (for example `https://api.openai.com/v1`, `http://localhost:1234/v1` for LM Studio, or `http://localhost:11434/v1` for Ollama), a key if it needs one, and a model that can read images. Ollama and LM Studio run on your own computer: free, private and no limits, but you need a vision model downloaded and a reasonably fast computer. For Ollama, start it with `OLLAMA_ORIGINS=*` so web pages may talk to it.
 2. Paste your key and press **Save key**, then **Test key**. This only lists your models, so it costs nothing.
 3. **Model:** keep the suggested one, or press **Load models** and pick from the list. Bigger models read better; free and small ones make more mistakes.
 4. Untick **Remember keys on this device** if you'd rather paste the key each session (useful on a shared computer).
@@ -203,4 +204,7 @@ Yes: use the AI reader (with your own API key) for the best results, or the free
 No. There's no key in the app. Each person adds their own key in their own browser.
 
 **Do I have to pay for the AI reader?**
-No. Google Gemini's free tier and OpenRouter's free models both work without payment, within their daily limits. If you hit a limit, wait (or try the next day), or use the offline reader.
+No. Google Gemini's free tier, Groq's free plan and OpenRouter's free models all work without payment, within their limits; a local Ollama or LM Studio model is free with no limits. If you hit a limit, wait (or try the next day), switch provider, or use the offline reader.
+
+**It says the model used up its answer limit.**
+Some free models (often picked by OpenRouter's random free router) spend their whole output allowance "thinking" before writing anything. Press **Load models** and pick a specific free vision model, or switch to Gemini or Groq.

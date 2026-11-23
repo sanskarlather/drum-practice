@@ -12,18 +12,21 @@ const PDFJS_BASE = (typeof window.PDFJS_BASE === "string") ? window.PDFJS_BASE :
 const SR = { sessionKeys: {} };
 // AI providers. Each person uses their own key; nothing here is a key.
 const AI_PROVIDERS = {
-  gemini: { label: "Google Gemini (free tier available)", keyUrl: "https://aistudio.google.com/apikey", keyHint: "AIza…",
+  gemini: { label: "Google Gemini (free tier)", keyUrl: "https://aistudio.google.com/apikey", keyHint: "AIza…",
     models: [["gemini-3.8-flash", "Gemini 3.8 Flash"]],
-    note: "Google's free tier needs no payment, but has low daily limits and can be busy at times. On the free tier Google may use what you send to improve its products." },
-  openrouter: { label: "OpenRouter (free models available)", keyUrl: "https://openrouter.ai/settings/keys", keyHint: "sk-or-…",
-    models: [["openrouter/free", "Free models router (picks a free model)"]],
-    note: "Models ending in :free cost nothing but have daily limits; quality varies by model. Use “Load models” to pick a specific vision model." },
+    note: "Free tier: no payment needed, but limited requests per minute and per day, and it can be busy at times. On the free tier Google may use what you send to improve its products." },
+  groq: { label: "Groq (free plan)", keyUrl: "https://console.groq.com/keys", keyHint: "gsk_…", base: "https://api.groq.com/openai/v1",
+    models: [["meta-llama/llama-4-scout-17b-16e-instruct", "Llama 4 Scout (vision)"], ["qwen/qwen3.8-27b", "Qwen 3.8 27B (vision, thinks more)"]],
+    note: "Free plan with rate limits; very fast. Only some Groq models read images: use the suggested ones, or Load models." },
+  openrouter: { label: "OpenRouter (free models)", keyUrl: "https://openrouter.ai/settings/keys", keyHint: "sk-or-…", base: "https://openrouter.ai/api/v1",
+    models: [["openrouter/free", "Free models router (random free model)"]],
+    note: "The free router picks a random free model each time, so results vary. For steadier results press “Load models” and pick a specific free vision model (they're listed first)." },
   anthropic: { label: "Anthropic Claude", keyUrl: "https://console.anthropic.com/settings/keys", keyHint: "sk-ant-…",
     models: [["claude-sonnet-5-5", "Claude Sonnet 5.5"], ["claude-opus-5-5", "Claude Opus 5.5 (most careful)"], ["claude-haiku-5-5", "Claude Haiku 5.5 (cheapest)"]],
     note: "Needs prepaid API credit on your Anthropic account." },
-  custom: { label: "Other OpenAI-compatible service", keyUrl: "", keyHint: "your key",
+  custom: { label: "Other OpenAI-compatible service", keyUrl: "", keyHint: "your key (if it needs one)",
     models: [],
-    note: "For OpenAI, Groq, Mistral, a local LM Studio/Ollama server, etc. Enter its base URL (usually ending in /v1) and a model that can read images. The service must allow requests from web pages (CORS)." },
+    note: "For OpenAI, a local Ollama or LM Studio server (free and private, on your own computer), etc. Enter its base URL (usually ending in /v1) and a model that can read images. The service must allow requests from web pages (for Ollama, set OLLAMA_ORIGINS=*)." },
 };
 const SR_MAX_PAGES = 8;
 
@@ -65,43 +68,73 @@ function srFileToCanvases(file){
 }
 
 /* ============ AI reader (user's own key) ============ */
-const AI_DRUMS = ["kick", "kick2", "snare", "hihat", "hihat_pedal", "tom1", "tom2", "tom3", "floor_tom", "floor_tom2", "crash", "crash2", "splash", "china", "ride"];
-const AI_TO_ID = { kick:"kick", kick2:"kick2", snare:"snare", hihat:"hihat", hihat_pedal:"hhp", tom1:"tom1", tom2:"tom2", tom3:"tom3", floor_tom:"floor", floor_tom2:"floor2", crash:"crash", crash2:"crash2", splash:"splash", china:"china", ride:"ride" };
-const AI_SCHEMA = {
-  type: "object",
-  properties: {
-    readable: { type: "boolean" },
-    title: { type: "string" },
-    bpm: { type: "integer" },
-    beats_per_bar: { type: "integer" },
-    bars: { type: "array", items: { type: "object", properties: {
-      hits: { type: "array", items: { type: "object", properties: {
-        step: { type: "integer" },
-        drums: { type: "array", items: { type: "string", enum: AI_DRUMS } }
-      }, required: ["step", "drums"], additionalProperties: false } }
-    }, required: ["hits"], additionalProperties: false } },
-    notes: { type: "string" }
-  },
-  required: ["readable", "title", "bpm", "beats_per_bar", "bars", "notes"],
-  additionalProperties: false
-};
-const AI_PROMPT = `You are transcribing drum sheet music for a beginner's practice app. The images above are the pages of one piece, in order.
+// The AI answers in compact drum-tab lines (one line per drum per bar). This is ~10x shorter than
+// listing every hit as JSON, so whole pages fit easily in any model's output limit, and models
+// already know drum tabs well.
+const TAB_CODES = { CR:"crash", CR2:"crash2", SP:"splash", CH:"china", RD:"ride", HH:"hihat", HP:"hhp",
+  SD:"snare", T1:"tom1", T2:"tom2", T3:"tom3", FT:"floor", FT2:"floor2", BD:"kick", BD2:"kick2" };
+const AI_PROMPT = (page, pages) => `You are transcribing drum sheet music for a beginner's practice app.${pages > 1 ? ` This image is page ${page} of ${pages} of one piece.` : ""}
 
-Write out every bar in playing order as a list of hits on a 16th-note grid:
-- "step" is the position in the bar in 16th notes, starting at 0. A 4/4 bar has steps 0-15 (beat 1 = 0, beat 2 = 4, beat 3 = 8, beat 4 = 12; the "&" of beat 1 = 2). A 3/4 bar has steps 0-11.
-- "drums" lists every drum struck at that step.
-- Expand repeat signs, "repeat previous bar" (%) marks and first/second endings, so the bars are exactly what is played. Leave out bars that are only rests at the very start.
-- If the page has a drum key/legend, follow it. Otherwise use standard drum-kit notation on a 5-line staff: kick = bottom space (F4); snare = third space (C5); floor tom = second space (A4); tom2 = middle line (B4) or fourth line (D5); tom1 = fourth space (E5); ride = x on the top line (F5); hihat = x just above the staff (G5); crash = x on the ledger line above (A5) or a circled x; hihat_pedal = x below the staff (D4). Use tom3, floor_tom2, crash2, splash, china and kick2 (left foot of a double pedal) only when the sheet clearly has those extra pieces.
-- Open hi-hat counts as hihat. Ghost notes, rimshots and cross-stick count as snare. Flams count as one hit. Round triplets and swing to the nearest 16th and say so in "notes".
-- "bpm": the tempo marking if there is one, otherwise 0. "beats_per_bar": from the time signature (4 for 4/4, 3 for 3/4; use 4 if unsure). "title": the piece's title if printed, else "".
-- "notes": one or two short sentences about anything you were unsure of or had to simplify. Empty if nothing.
-- If the images are not drum notation, or are unreadable, set "readable" to false and explain in "notes".`;
+Write every bar on this page, in playing order, as drum tab. Answer in EXACTLY this plain-text format and nothing else:
 
+TITLE: <title printed on the page, or blank>
+TEMPO: <tempo marking in BPM, or 0 if none>
+TIME: <4/4 or 3/4>
+BAR 1
+HH x.x.x.x.x.x.x.x.
+SD ....x.......x...
+BD x.......x.......
+BAR 2
+...
+NOTES: <one short sentence about anything unsure or simplified, or blank>
+
+Rules:
+- Each drum line is a code, a space, then one character per 16th note: 16 characters for a 4/4 bar, 12 for 3/4. "x" = hit, "." = no hit. Only list drums that are played in that bar.
+- Codes: CR crash, CR2 second crash, SP splash, CH china, RD ride, HH hi-hat, HP hi-hat pedal (foot), SD snare, T1 high tom, T2 mid tom, T3 third tom, FT floor tom, FT2 second floor tom, BD bass drum/kick, BD2 second kick (double pedal).
+- Follow the page's drum key/legend if it has one. Otherwise standard drum-kit notation on a 5-line staff: kick = bottom space; snare = third space; floor tom = second space; T2 = middle line; T1 = fourth space; ride = x on the top line; hi-hat = x just above the staff; crash = x on the ledger line above or a circled x; hi-hat pedal = x below the staff.
+- Write out repeat signs and "repeat bar" marks in full. Open hi-hat counts as HH. Ghost notes, rimshots and cross-stick count as SD. Round triplets and swing to the nearest 16th.
+- If the image is not drum notation, answer only: UNREADABLE: <reason>
+- Do not explain, do not use code blocks, keep it short.`;
+
+// Turn the drum-tab answer into bars of {step, drum}. Tolerates small format slips.
+function srParseTab(text, beats){
+  const out = { title:"", bpm:0, beats, bars:[], notes:"" };
+  const t = String(text || "").replace(/```[a-z]*/gi, "");
+  const un = t.match(/UNREADABLE:\s*(.*)/i); if (un && !/BAR\s*\d/i.test(t)) { out.unreadable = un[1].trim() || "no drum notation found"; return out; }
+  let cur = null;
+  for (const raw of t.split(/\r?\n/)) {
+    const line = raw.trim(); if (!line) continue;
+    let m;
+    if ((m = line.match(/^TITLE\s*:\s*(.*)$/i))) { out.title = m[1].trim().replace(/^<.*>$/, ""); continue; }
+    if ((m = line.match(/^TEMPO\s*:\s*(\d+)/i))) { out.bpm = +m[1]; continue; }
+    if ((m = line.match(/^TIME\s*:\s*(\d)\s*\/\s*(\d)/i))) { out.beats = +m[1] === 3 ? 3 : 4; continue; }
+    if ((m = line.match(/^NOTES\s*:\s*(.*)$/i))) { out.notes = m[1].trim(); continue; }
+    if (/^BAR\b/i.test(line)) { cur = []; out.bars.push(cur); continue; }
+    if ((m = line.match(/^(CR2|CR|SP|CH|RD|HH|HP|SD|T1|T2|T3|FT2|FT|BD2|BD)\b\s*[:|]?\s*([xXoO.\-|_ ]+)$/))) {
+      if (!cur) { cur = []; out.bars.push(cur); }
+      const cells = m[2].replace(/[|\s]/g, "").replace(/[-_]/g, ".");
+      cur.push({ d: TAB_CODES[m[1]], cells });
+    }
+  }
+  return out;
+}
+function srTabNotes(parsed, startBar){
+  const spb = parsed.beats * 4, notes = [];
+  parsed.bars.forEach((bar, bi) => bar.forEach(({ d, cells }) => {
+    // 16 cells = 16ths; 8 = 8ths; 4 = quarters (in 4/4). Anything else is stretched to fit the bar.
+    const n = cells.length; if (!n) return;
+    for (let i = 0; i < n; i++) if (/[xXoO]/.test(cells[i])) {
+      const st = (startBar + bi) * spb + Math.min(spb - 1, Math.floor(i * spb / n + 1e-9));
+      if (!notes.some(x => x.s === st && x.d === d)) notes.push({ s: st, d });
+    }
+  }));
+  return notes;
+}
 const aiProv = () => settings.ai.provider;
 function srKey(prov = aiProv()){ return (settings.ai.remember ? settings.ai.keys[prov] : SR.sessionKeys[prov]) || ""; }
 function srModel(prov = aiProv()){ return settings.ai.models[prov] || (AI_PROVIDERS[prov].models[0] || [""])[0]; }
 function srBase(prov = aiProv()){
-  if (prov === "openrouter") return "https://openrouter.ai/api/v1";
+  if (AI_PROVIDERS[prov].base) return AI_PROVIDERS[prov].base;
   return (settings.ai.baseUrl || "").trim().replace(/\/+$/, "").replace(/\/chat\/completions$/, "");
 }
 function srJpeg(c, maxEdge = 1568){
@@ -116,96 +149,105 @@ async function srFetch(url, opts){
   catch (e) { throw new Error("Couldn't reach " + new URL(url).host + ". Check your internet connection. (Inside claude.ai the app can't make this request: use your GitHub Pages link. A custom service must allow requests from web pages.)"); }
   return { ok: r.ok, status: r.status, text: await r.text() };
 }
-function srErrMsg(r){ try { const j = JSON.parse(r.text); return (j.error && (j.error.message || j.error)) || j.message || ""; } catch (e) { return r.text.slice(0, 200); } }
+const srSleep = ms => new Promise(r => setTimeout(r, ms));
+// Retry once when the provider is busy or the free-tier per-minute limit is hit.
+async function srFetchRetry(url, opts, onStep){
+  let r = await srFetch(url, opts);
+  if (r.status === 429 || r.status === 503 || r.status === 500 || r.status === 529) {
+    const wait = r.status === 429 ? 20000 : 5000;
+    onStep && onStep(r.status === 429 ? "Free-tier limit reached; waiting 20 seconds, then trying again…" : "The service is busy; trying again in 5 seconds…");
+    await srSleep(wait); r = await srFetch(url, opts);
+  }
+  return r;
+}
+function srErrMsg(r){ try { const j = JSON.parse(r.text); const e = j.error || j; return (e.message || (e.metadata && e.metadata.raw) || (typeof e === "string" ? e : "")) + ""; } catch (e) { return r.text.slice(0, 200); } }
+const provName = prov => AI_PROVIDERS[prov].label.replace(/ \(.*\)$/, "");
 function srApiError(r, prov = aiProv()){
-  const msg = String(srErrMsg(r) || ""), name = AI_PROVIDERS[prov].label.replace(/ \(.*\)$/, "");
-  if (r.status === 401 || /API_KEY_INVALID|invalid.*key|incorrect api key/i.test(msg)) return `The ${name} API key was rejected. Check it in Library → Sheet reading.`;
-  if (r.status === 402 || /credit|billing|balance|insufficient/i.test(msg)) return `Your ${name} account has no credit for this: ${msg}`;
-  if (r.status === 429) return prov === "gemini" ? "Gemini's free-tier limit was reached. Wait a minute (or until tomorrow for the daily limit) and try again." : `Too many requests to ${name} right now. Wait a minute and try again.`;
-  if (r.status === 404 || /not found|does not exist|unknown model/i.test(msg)) return `The model “${srModel(prov)}” wasn't found. Press “Load models” in Library → Sheet reading and pick one.`;
-  if (r.status === 503 || r.status === 529 || r.status === 500) return `${name} is busy right now. Try again in a minute, or use the offline reader.`;
+  const msg = String(srErrMsg(r) || ""), name = provName(prov);
+  if (r.status === 401 || /API_KEY_INVALID|invalid.*key|incorrect api key/i.test(msg)) return `The ${name} API key was rejected. Check it in Library → Sheet reading, and that it is a key from ${name}.`;
+  if (r.status === 402 || /credit|billing|balance|insufficient/i.test(msg)) return `Your ${name} account has no credit for this model. Pick a free model (Load models) or another provider. (${msg})`;
+  if (r.status === 429) return prov === "gemini" ? "Gemini's free-tier limit was reached. Wait a few minutes (or until tomorrow for the daily limit), or use another provider." : `${name}'s rate limit was reached${/free/i.test(srModel(prov)) ? " for this free model" : ""}. Wait a few minutes, pick another model, or use another provider.`;
+  if (r.status === 404 || /not found|does not exist|unknown model|no endpoints/i.test(msg)) return `The model “${srModel(prov)}” isn't available${/image|vision|modalit/i.test(msg) ? " for images" : ""}. Press “Load models” in Library → Sheet reading and pick one that reads images.`;
+  if (/image|vision|modalit|multimodal/i.test(msg)) return `The model “${srModel(prov)}” can't read images. Press “Load models” and pick a vision model.`;
+  if (r.status === 503 || r.status === 529 || r.status === 500 || r.status === 502) return `${name} is busy right now. Try again in a minute, or use another provider or the offline reader.`;
   if (r.status === 403) return `${name} refused the request: ${msg}`;
   return `${name} error ${r.status}${msg ? ": " + msg : ""}`;
 }
-function srExtractJson(t){
-  t = t.replace(/```(?:json)?/g, "");
-  const a = t.indexOf("{"), b = t.lastIndexOf("}"); if (a < 0 || b < a) throw new Error("The AI didn't return a readable answer. Try again, or try another model.");
-  return t.slice(a, b + 1);
-}
-const AI_JSON_HINT = "Reply with only one JSON object with the keys readable, title, bpm, beats_per_bar, bars (each {\"hits\":[{\"step\":0,\"drums\":[\"kick\"]}]}), notes. No other text.";
 
-// One call per provider. Each returns {text, usage}.
+// One call per provider, one page per call. Each returns {text, cut, usage}.
 const AI_CALL = {
-  async anthropic(images, key, model){
-    const content = [];
-    images.forEach((d, i) => { content.push({ type: "text", text: `Page ${i + 1}:` }); content.push({ type: "image", source: { type: "base64", media_type: "image/jpeg", data: d } }); });
-    content.push({ type: "text", text: AI_PROMPT });
-    const body = { model, max_tokens: 16000, messages: [{ role: "user", content }], output_config: { format: { type: "json_schema", schema: AI_SCHEMA } } };
-    const go = () => srFetch("https://api.anthropic.com/v1/messages", { method: "POST", body: JSON.stringify(body),
-      headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json", "anthropic-dangerous-direct-browser-access": "true" } });
-    let r = await go();
-    if (!r.ok && r.status === 400 && /output_config|json_schema|format/i.test(r.text)) { delete body.output_config; content.push({ type: "text", text: AI_JSON_HINT }); r = await go(); }
+  async anthropic(img, prompt, key, model, onStep){
+    const body = { model, max_tokens: 8000, messages: [{ role: "user", content: [
+      { type: "image", source: { type: "base64", media_type: "image/jpeg", data: img } }, { type: "text", text: prompt } ] }] };
+    const r = await srFetchRetry("https://api.anthropic.com/v1/messages", { method: "POST", body: JSON.stringify(body),
+      headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json", "anthropic-dangerous-direct-browser-access": "true" } }, onStep);
     if (!r.ok) throw new Error(srApiError(r, "anthropic"));
     const data = JSON.parse(r.text);
-    if (data.stop_reason === "max_tokens") throw new Error("The piece is too long to read in one go. Try a PDF with fewer pages.");
     if (data.stop_reason === "refusal") throw new Error("The model declined to read this image.");
-    return { text: (data.content || []).filter(b => b.type === "text").map(b => b.text).join(""), usage: data.usage ? `${data.usage.input_tokens + data.usage.output_tokens} tokens` : "" };
+    return { text: (data.content || []).filter(b => b.type === "text").map(b => b.text).join(""), cut: data.stop_reason === "max_tokens",
+             usage: data.usage ? data.usage.input_tokens + data.usage.output_tokens : 0 };
   },
-  async gemini(images, key, model){
-    const parts = [];
-    images.forEach((d, i) => { parts.push({ text: `Page ${i + 1}:` }); parts.push({ inlineData: { mimeType: "image/jpeg", data: d } }); });
-    parts.push({ text: AI_PROMPT });
-    const body = { contents: [{ role: "user", parts }], generationConfig: { responseMimeType: "application/json", responseJsonSchema: AI_SCHEMA, maxOutputTokens: 16000 } };
-    const go = () => srFetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model.replace(/^models\//, ""))}:generateContent`,
-      { method: "POST", headers: { "x-goog-api-key": key, "content-type": "application/json" }, body: JSON.stringify(body) });
+  async gemini(img, prompt, key, model, onStep){
+    const body = { contents: [{ role: "user", parts: [{ inlineData: { mimeType: "image/jpeg", data: img } }, { text: prompt }] }],
+      generationConfig: { maxOutputTokens: 16000, thinkingConfig: { thinkingLevel: "low" } } };
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model.replace(/^models\//, ""))}:generateContent`;
+    const go = () => srFetchRetry(url, { method: "POST", headers: { "x-goog-api-key": key, "content-type": "application/json" }, body: JSON.stringify(body) }, onStep);
     let r = await go();
-    if (!r.ok && r.status === 400 && /responseJsonSchema|schema|response_json_schema/i.test(r.text)) { delete body.generationConfig.responseJsonSchema; parts.push({ text: AI_JSON_HINT }); r = await go(); }
+    if (!r.ok && r.status === 400 && /thinking/i.test(r.text)) { delete body.generationConfig.thinkingConfig; r = await go(); } // models without that setting
     if (!r.ok) throw new Error(srApiError(r, "gemini"));
     const data = JSON.parse(r.text);
     if (data.promptFeedback && data.promptFeedback.blockReason) throw new Error("Gemini blocked this request (" + data.promptFeedback.blockReason + ").");
-    const cand = (data.candidates || [])[0];
-    if (!cand) throw new Error("Gemini returned no answer. Try again.");
-    if (cand.finishReason === "MAX_TOKENS") throw new Error("The piece is too long to read in one go. Try a PDF with fewer pages.");
-    const u = data.usageMetadata;
-    return { text: ((cand.content && cand.content.parts) || []).map(p => p.text || "").join(""), usage: u ? `${u.totalTokenCount} tokens` : "" };
+    const cand = (data.candidates || [])[0]; if (!cand) throw new Error("Gemini returned no answer. Try again.");
+    return { text: ((cand.content && cand.content.parts) || []).filter(p => !p.thought).map(p => p.text || "").join(""), cut: cand.finishReason === "MAX_TOKENS",
+             usage: data.usageMetadata ? data.usageMetadata.totalTokenCount : 0 };
   },
-  async openrouter(images, key, model){ return AI_CALL.custom(images, key, model, "openrouter"); },
-  async custom(images, key, model, prov = "custom"){
+  async openai(img, prompt, key, model, onStep, prov){
     const base = srBase(prov); if (!base) throw new Error("Enter the service's base URL in Library → Sheet reading.");
     if (!model) throw new Error("Enter a model name in Library → Sheet reading (press “Load models” to see what's available).");
-    const content = [{ type: "text", text: AI_PROMPT + "\n\n" + AI_JSON_HINT }];
-    images.forEach(d => content.push({ type: "image_url", image_url: { url: "data:image/jpeg;base64," + d } }));
     const headers = { "content-type": "application/json" };
     if (key) headers.authorization = "Bearer " + key;
     if (prov === "openrouter") { headers["HTTP-Referer"] = location.origin; headers["X-Title"] = "Drum Practice"; }
-    const body = { model, messages: [{ role: "user", content }], max_tokens: 8000 };
-    const go = () => srFetch(base + "/chat/completions", { method: "POST", headers, body: JSON.stringify(body) });
+    const body = { model, max_tokens: 12000, messages: [{ role: "user", content: [
+      { type: "text", text: prompt }, { type: "image_url", image_url: { url: "data:image/jpeg;base64," + img } } ] }] };
+    // Keep "thinking" short: on OpenRouter it shares the output limit with the answer.
+    if (prov === "openrouter") body.reasoning = { effort: "low", exclude: true };
+    const go = () => srFetchRetry(base + "/chat/completions", { method: "POST", headers, body: JSON.stringify(body) }, onStep);
     let r = await go();
-    if (!r.ok && r.status === 400 && /max_tokens/i.test(r.text)) { delete body.max_tokens; r = await go(); }
+    if (!r.ok && r.status === 400 && /reasoning/i.test(r.text)) { delete body.reasoning; r = await go(); }
+    if (!r.ok && r.status === 400 && /max_tokens|max_completion/i.test(r.text)) { body.max_tokens = 4096; r = await go(); }
     if (!r.ok) throw new Error(srApiError(r, prov));
     const data = JSON.parse(r.text);
     if (data.error) throw new Error(srApiError({ status: data.error.code || 500, text: JSON.stringify(data) }, prov));
     const ch = (data.choices || [])[0]; if (!ch) throw new Error("The service returned no answer. Try again.");
-    if (ch.finish_reason === "length") throw new Error("The answer was cut off. Try fewer pages, or a model with a longer output limit.");
     const c = ch.message && ch.message.content;
     const text = Array.isArray(c) ? c.map(x => x.text || "").join("") : (c || "");
-    const usedModel = data.model && data.model !== model ? ` via ${data.model}` : "";
-    return { text, usage: (data.usage ? `${data.usage.total_tokens} tokens` : "") + usedModel };
+    return { text, cut: ch.finish_reason === "length", usage: data.usage ? data.usage.total_tokens : 0, used: data.model && data.model !== model ? data.model : "" };
   },
 };
-async function srAiRead(canvases, onStep){
-  const prov = aiProv(), P = AI_PROVIDERS[prov], key = srKey(prov), model = srModel(prov);
-  if (!key && prov !== "custom") throw new Error(`Add your ${P.label.replace(/ \(.*\)$/, "")} API key first (Library → Sheet reading).`);
-  onStep && onStep(`Sending ${canvases.length} page${canvases.length > 1 ? "s" : ""} to ${P.label.replace(/ \(.*\)$/, "")}…`);
-  const { text, usage } = await AI_CALL[prov](canvases.map(c => srJpeg(c)), key, model);
-  let j; try { j = JSON.parse(srExtractJson(text)); } catch (e) { throw new Error(e.message.startsWith("The AI") ? e.message : "The AI's answer wasn't valid JSON. Try again, or try another model."); }
-  if (j.readable === false) throw new Error("The AI couldn't read drum notation here" + (j.notes ? ": " + j.notes : "."));
-  const beats = +j.beats_per_bar === 3 ? 3 : 4, spb = beats * 4, notes = [];
-  (Array.isArray(j.bars) ? j.bars : []).forEach((bar, bi) => ((bar && bar.hits) || []).forEach(hh => {
-    const s = Math.max(0, Math.min(spb - 1, Math.round(+hh.step || 0)));
-    (hh.drums || []).forEach(d => { const id = AI_TO_ID[String(d).toLowerCase()]; if (id && !notes.some(n => n.s === bi*spb + s && n.d === id)) notes.push({ s: bi*spb + s, d: id }); });
-  }));
-  return { title: j.title || "", bpm: j.bpm > 20 && j.bpm < 300 ? Math.round(j.bpm) : 0, beats, bars: Math.max(1, (j.bars || []).length), notes, report: j.notes || "", usage };
+async function srAiRead(canvases, onStep, beatsHint = 4){
+  const prov = aiProv(), P = AI_PROVIDERS[prov], key = srKey(prov), model = srModel(prov), name = provName(prov);
+  if (!key && prov !== "custom") throw new Error(`Add your ${name} API key first (Library → Sheet reading).`);
+  const call = AI_CALL[prov] || AI_CALL.openai;
+  const all = { title:"", bpm:0, beats: beatsHint, notes: [], bars: 0, reports: [], usage: 0, used: new Set() };
+  for (let p = 0; p < canvases.length; p++) {
+    onStep && onStep(canvases.length > 1 ? `Reading page ${p + 1} of ${canvases.length} with ${name}…` : `Reading the page with ${name}…`);
+    if (p) await srSleep(1500); // be gentle with free-tier per-minute limits
+    const res = await call(srJpeg(canvases[p]), AI_PROMPT(p + 1, canvases.length), key, model, onStep, prov);
+    all.usage += res.usage || 0; if (res.used) all.used.add(res.used);
+    const tab = srParseTab(res.text, all.beats);
+    if (tab.unreadable) { if (canvases.length === 1) throw new Error("The AI couldn't read drum notation here: " + tab.unreadable); all.reports.push(`Page ${p + 1}: ${tab.unreadable}`); continue; }
+    if (!tab.bars.length) {
+      if (res.cut) throw new Error(`The model used up its whole answer limit before writing the notes (usually because it "thinks" a lot). Pick a different model with “Load models”, preferably one without reasoning, or use another provider.`);
+      throw new Error("The AI's answer didn't contain any bars. Try again, or pick another model.");
+    }
+    if (p === 0) { all.title = tab.title; all.bpm = tab.bpm; all.beats = tab.beats; }
+    tab.beats = all.beats;
+    all.notes.push(...srTabNotes(tab, all.bars)); all.bars += tab.bars.length;
+    if (tab.notes) all.reports.push((canvases.length > 1 ? `Page ${p + 1}: ` : "") + tab.notes);
+    if (res.cut) all.reports.push(`Page ${p + 1} may be incomplete (the answer was cut off). Check the last bars.`);
+  }
+  return { title: all.title, bpm: all.bpm > 20 && all.bpm < 300 ? all.bpm : 0, beats: all.beats, bars: Math.max(1, all.bars), notes: all.notes,
+           report: all.reports.join(" "), usage: (all.usage ? all.usage + " tokens" : "") + (all.used.size ? " via " + [...all.used].join(", ") : "") };
 }
 // Lists the models a key can use. Costs nothing, so it doubles as "Test key".
 async function srListModels(prov, key){
@@ -224,12 +266,23 @@ async function srListModels(prov, key){
     if (!r.ok) throw new Error(srApiError(r, prov));
     let list = JSON.parse(r.text).data || [];
     if (prov === "openrouter") {
+      // vision models only; free ones first, models that don't need reasoning before those that do
       list = list.filter(m => !m.architecture || !m.architecture.input_modalities || m.architecture.input_modalities.includes("image"));
-      list.sort((a, b) => (/:free$/.test(b.id) - /:free$/.test(a.id)) || a.id.localeCompare(b.id));
+      const free = m => /:free$/.test(m.id) || (m.pricing && +m.pricing.prompt === 0 && +m.pricing.completion === 0);
+      const thinks = m => !!(m.reasoning && m.reasoning.mandatory);
+      list.sort((a, b) => (free(b) - free(a)) || (thinks(a) - thinks(b)) || a.id.localeCompare(b.id));
     }
     ids = list.map(m => m.id);
   }
   return ids;
+}
+// Guess the provider from what a key looks like, so a key pasted under the wrong provider still works.
+function srGuessProvider(k){
+  if (/^AIza/.test(k)) return "gemini";
+  if (/^sk-or-/.test(k)) return "openrouter";
+  if (/^sk-ant-/.test(k)) return "anthropic";
+  if (/^gsk_/.test(k)) return "groq";
+  return null;
 }
 /* ============ Offline reader (optical music recognition) ============ */
 // Grayscale + adaptive threshold (Bradley): copes with uneven lighting in photos.
@@ -540,10 +593,9 @@ function srMethodHint(){
   const m = $("#srMethod").value, prov = aiProv(), P = AI_PROVIDERS[prov], k = !!srKey(prov) || prov === "custom";
   const name = P.label.replace(/ \(.*\)$/, "");
   $("#srHint").innerHTML = m === "ai"
-    ? (k ? `Uses <b>your</b> ${esc(name)} key, model ${esc(srModel(prov))}. ${prov === "gemini" || /:free$|openrouter\/free/.test(srModel(prov)) ? "Free within the provider's limits." : "Charged to your account."}` : `<span style="color:var(--amber)">No ${esc(name)} key set.</span> Add one under Library → Sheet reading, or use the offline reader.`)
+    ? (k ? `Uses <b>your</b> ${esc(name)} key, model ${esc(srModel(prov))}. ${prov === "gemini" || prov === "groq" || /:free$|openrouter\/free/.test(srModel(prov)) ? "Free within the provider's limits." : "May be charged to your account."}` : `<span style="color:var(--amber)">No ${esc(name)} key set.</span> Add one under Library → Sheet reading, or use the offline reader.`)
     : "Runs on this device, free. Best on clean printed sheets with simple rhythms; photos should be straight and evenly lit.";
-  $("#srBeatsRow").hidden = m === "ai";
-}
+  }
 function srClose(){ $("#srDialog").hidden = true; SRD = null; }
 async function srGo(){
   if (!SRD || !SRD.pages) return;
@@ -552,7 +604,7 @@ async function srGo(){
   const step = t => { $("#srStatus").textContent = t; };
   try {
     let res;
-    if (method === "ai") res = await srAiRead(SRD.pages, step);
+    if (method === "ai") res = await srAiRead(SRD.pages, step, beats);
     else { step("Reading notes…"); await new Promise(r => setTimeout(r, 30)); res = srOfflineRead(SRD.pages, beats); }
     if (!res.notes.length) throw new Error("No notes were found. " + (method === "offline" ? "Try the AI reader, or a clearer image." : (res.report || "")));
     const name = SRD.file.name.replace(/\.[^.]+$/, "");
@@ -583,9 +635,11 @@ function srWire(){
   $("#aiProvider").innerHTML = Object.entries(AI_PROVIDERS).map(([id, P]) => `<option value="${id}">${esc(P.label)}</option>`).join("");
   $("#aiProvider").onchange = e => { settings.ai.provider = e.target.value; saveSettings(); srRenderSettings(); };
   $("#aiSave").onclick = () => {
-    const v = $("#aiKey").value.trim(), prov = aiProv();
+    const v = $("#aiKey").value.trim(); let prov = aiProv();
     if (!v) { toast("Paste your API key first"); return; }
-    srSetKey(prov, v); saveSettings(); srRenderSettings(); toast("API key saved");
+    const g = srGuessProvider(v);
+    if (g && g !== prov) { prov = settings.ai.provider = g; toast(`That looks like a ${provName(g)} key, so the provider was switched to ${provName(g)}.`); } else toast("API key saved");
+    srSetKey(prov, v); saveSettings(); srRenderSettings();
   };
   $("#aiRemove").onclick = () => { const prov = aiProv(); settings.ai.keys[prov] = ""; SR.sessionKeys[prov] = ""; saveSettings(); srRenderSettings(); toast("API key removed from this device"); };
   $("#aiRemember").onchange = e => {
