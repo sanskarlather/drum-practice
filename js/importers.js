@@ -16,13 +16,23 @@ function parseMidi(b, name){
       if (st===0xFF){ const type=b[p++], l=vlq(); if (type===0x51 && tempo==null) tempo = 60000000/((b[p]<<16)|(b[p+1]<<8)|b[p+2]); if (type===0x58) beats = b[p]===3?3:4; p+=l; }
       else if (st===0xF0 || st===0xF7){ p += vlq(); }
       else { run = st; const hi = st&0xF0, ch = st&0x0F;
-        if (hi===0xC0 || hi===0xD0) p+=1; else { const a=b[p++], v=b[p++]; if (hi===0x90 && v>0) hits.push({tick, n:a, ch}); } }
+        if (hi===0xC0 || hi===0xD0) p+=1; else { const a=b[p++], v=b[p++]; if (hi===0x90 && v>0) hits.push({tick, n:a, ch, v}); } }
     }
     p = end;
   }
   let use = hits.filter(x=>x.ch===9); if (!use.length) use = hits.filter(x=>GM[x.n]);
+  // General MIDI notes that mean a special stroke; how hard each note is played gives accents and ghost notes
+  const GM_IMPORT_ART = { 46:"open", 26:"open", 37:"xstick", 53:"bell" };
+  const vels = {}; for (const x of use) { const d = GM[x.n]; if (d) (vels[d] = vels[d] || []).push(x.v); }
+  const med = {}; for (const d in vels) { const a = vels[d].slice().sort((p,q)=>p-q); med[d] = a[a.length>>1]; }
   const notes = []; const seen = new Set(); let maxS = 0;
-  for (const x of use){ const d = GM[x.n]; if (!d) continue; const s = Math.round(x.tick/(div/4)); const k=s+d; if (seen.has(k)) continue; seen.add(k); notes.push({s,d}); maxS=Math.max(maxS,s); }
+  for (const x of use){
+    const d = GM[x.n]; if (!d) continue; const s = Math.round(x.tick/(div/4)); const k=s+"|"+d; if (seen.has(k)) continue; seen.add(k);
+    let a = GM_IMPORT_ART[x.n] || null;
+    if (!a && x.v >= 100 && x.v >= med[d] + 15) a = "accent";
+    else if (!a && x.v <= 55 && x.v <= med[d] - 20 && d !== "kick" && d !== "hhp") a = "ghost";
+    notes.push(a ? {s,d,a} : {s,d}); maxS=Math.max(maxS,s);
+  }
   const spb = beats*4;
   return {id:uid(), title:name, bpm: Math.round(tempo||100), beats, bars: Math.max(1, Math.min(64, Math.ceil((maxS+1)/spb))), notes: notes.filter(n=>n.s < 64*spb)};
 }
@@ -53,7 +63,7 @@ function parseMusicXML(text, name){
   const parts = [...doc.getElementsByTagName("part")];
   const part = parts.find(p=>p.getElementsByTagName("unpitched").length) || parts[0];
   if (!part) throw new Error("no parts found");
-  let divisions = 1, beats = 4, beatType = 4, tempo = null, mStart = 0; const notes = []; const seen = new Set();
+  let divisions = 1, beats = 4, beatType = 4, tempo = null, mStart = 0, grace = false; const notes = []; const seen = new Set();
   for (const m of part.children) {
     if (m.nodeName !== "measure") continue;
     let local = 0, lastStart = 0, maxLocal = 0;
@@ -64,16 +74,29 @@ function parseMusicXML(text, name){
       else if (c.nodeName==="backup") local -= +(txt(c,"duration")||0);
       else if (c.nodeName==="forward") { local += +(txt(c,"duration")||0); maxLocal=Math.max(maxLocal,local); }
       else if (c.nodeName==="note") {
-        if (kid(c,"grace")) continue;
+        if (kid(c,"grace")) { grace = true; continue; } // a grace note just before a note = flam
         const dur = +(txt(c,"duration")||0), chord = !!kid(c,"chord");
         const st = chord ? lastStart : local; if (!chord) { lastStart = local; local += dur; maxLocal = Math.max(maxLocal, local); }
         if (kid(c,"rest")) continue;
-        const ins = kid(c,"instrument"); let d = ins ? byName(instName[ins.getAttribute("id")]) : null;
+        const ins = kid(c,"instrument"), iname = ins ? (instName[ins.getAttribute("id")] || "") : ""; let d = ins ? byName(iname) : null;
         const up = kid(c,"unpitched"), pi = kid(c,"pitch");
         if (!d && up) d = byPos(txt(up,"display-step"), txt(up,"display-octave"), txt(c,"notehead"));
         if (!d && pi) d = byPos(txt(pi,"step"), txt(pi,"octave"), txt(c,"notehead"));
         if (!d) continue;
-        const s = Math.round((mStart + st) / divisions * 4); const k = s+d; if (seen.has(k)) continue; seen.add(k); notes.push({s,d});
+        const s = Math.round((mStart + st) / divisions * 4); const k = s+"|"+d; if (seen.has(k)) continue; seen.add(k);
+        // how it's played: from the instrument name, articulation marks, noteheads and grace notes
+        const head = c.getElementsByTagName("notehead")[0], has = t => c.getElementsByTagName(t).length > 0;
+        let a = null;
+        if (/open/.test(iname) && d === "hihat") a = "open";
+        else if (/side stick|cross/.test(iname)) a = "xstick";
+        else if (/rim ?shot/.test(iname)) a = "rim";
+        else if (/bell/.test(iname) && d === "ride") a = "bell";
+        else if ((has("open") || has("open-string")) && d === "hihat") a = "open";
+        else if (head && head.getAttribute("parentheses") === "yes") a = "ghost";
+        else if (has("accent") || has("strong-accent")) a = "accent";
+        else if (grace) a = "flam";
+        grace = false;
+        notes.push(a ? {s,d,a} : {s,d});
       }
     }
     const full = beats * (4/beatType) * divisions;

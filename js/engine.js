@@ -7,7 +7,7 @@ const E = {
   stepSec(){ return 60/this.bpm/4; },
   windowSteps(ms){ return ms/1000/this.stepSec(); },
 };
-function resetStats(){ E.stats = {judged:0, good:0, perfect:0, miss:0, streak:0, best:0, offs:[]}; renderStats(); }
+function resetStats(){ E.stats = {judged:0, good:0, perfect:0, miss:0, streak:0, best:0, offs:[], artRight:0, artWrong:0}; renderStats(); }
 function loadSong(song, keepTempo){
   stop();
   E.C = compile(song);
@@ -77,7 +77,7 @@ function loop(){
     const raw = E.nextSched, s = raw >= C.total ? raw - C.total : raw, t = now() + Math.max(0,(raw - pos))*E.stepSec();
     const metro = settings.metro || s < 0 || E.mode==="record";
     if (metro && ((s % 4)+4)%4===0 && E.mode!=="preview") click(t, ((s % C.spb)+C.spb)%C.spb===0);
-    if (s>=0 && (settings.demo || E.mode==="preview")) { const ei = C.stepMap.get(s); if (ei!=null) C.events[ei].drums.forEach(d=>playDrum(d,t,0.85)); }
+    if (s>=0 && (settings.demo || E.mode==="preview")) { const ei = C.stepMap.get(s); if (ei!=null) { const ev = C.events[ei]; ev.drums.forEach(d=>playDrum(d,t,0.85,ev.art[d])); } }
     E.nextSched++;
   }
   // end of song
@@ -94,18 +94,36 @@ function finish(){
   const st = E.stats, acc = st.judged ? Math.round(100*st.good/st.judged) : 0;
   const id = E.C.song.id; const prev = bests[id]||0; if (acc>prev) { bests[id]=acc; store.set("bests",bests); }
   $("#endTitle").textContent = acc>=90 ? "Great job!" : acc>=70 ? "Nice work!" : "Keep going!";
-  $("#endText").textContent = `On target: ${acc}% · Longest run: ${st.best} in a row · Best ever: ${Math.max(acc,prev)}%` + (acc<70 ? ". Try it slower, or turn on Wait for me." : "");
+  const artTotal = (st.artRight||0) + (st.artWrong||0);
+  $("#endText").textContent = `On target: ${acc}% · Longest run: ${st.best} in a row · Best ever: ${Math.max(acc,prev)}%` + (artTotal ? ` · Accents, ghosts, open hi-hats etc. right: ${Math.round(100*(st.artRight||0)/artTotal)}%` : "") + (acc<70 ? ". Try it slower, or turn on Wait for me." : "");
   const li = LESSONS.findIndex(l=>l.id===id); $("#endNext").hidden = li<0 || li===LESSONS.length-1;
   $("#endOverlay").hidden = false; updateFrame(true); renderLibrary();
 }
 
 /* -------- judging -------- */
-function judge(drum, pos){
+// Is the way it was played (info: {a, vel, src}) what the note asks for? Returns null if fine, else a tip.
+function articProblem(n, info){
+  if (!settings.artic || !info || !n) return null;
+  const want = n.a || null, got = info.a || null, type = D[n.d] && D[n.d].type;
+  const variantWanted = want && ARTICS[want].variant, gotVariant = got && ARTICS[got] && ARTICS[got].variant;
+  if (info.src === "midi" || info.src === "mic-variant") {
+    if (variantWanted && got !== want) return { short: ARTICS[want].short + "!", tip: ARTICS[want].tip };
+    if (!variantWanted && gotVariant && variantsFor(n.d).includes(got)) return { short: got==="open" ? "CLOSE IT" : "NORMAL HIT", tip: got==="open" ? "Keep the hi-hat closed for this one" : `That was a ${ARTICS[got].label.toLowerCase()}: hit the middle of the ${D[n.d].name.toLowerCase()}` };
+  }
+  if (info.vel != null && (info.src === "midi" || info.src === "mic")) {
+    if (want === "accent" && info.vel < settings.vel.accent/127) return { short: "HARDER", tip: "Accent: hit it harder" };
+    if (want === "ghost" && info.vel > settings.vel.ghost/127) return { short: "SOFTER", tip: "Ghost note: much softer" };
+  }
+  return null;
+}
+function judge(drum, pos, info){
   const C = E.C; const w = E.windowSteps(160);
   let best=null, bd=1e9;
   for (const n of C.notes) { if (n.j || n.d!==drum) continue; const dd = Math.abs(n.s - pos); if (dd < bd) { bd=dd; best=n; } if (n.s > pos + w) break; }
   const st = E.stats;
   if (E.blocked && best && best.ev === blockEvent() && C.events[best.ev].s === E.posBase) {
+    const prob = articProblem(best, info);
+    if (prob) { floatText(drum, prob.short, "#FFB547"); setFb("Not quite", "#FFB547", "#0E0F12", prob.tip); return; } // wait until it's played right
     best.j="ok"; st.judged++; st.good++; st.streak++; st.best=Math.max(st.best,st.streak);
     floatText(drum,"Got it!","#7BD389"); setFb("Got it!","#7BD389","#0E0F12", D[drum].name); renderStats(); return;
   }
@@ -113,9 +131,15 @@ function judge(drum, pos){
   const ms = (pos - best.s)*E.stepSec()*1000;
   const a = Math.abs(ms);
   best.j = a<=45 ? "perfect" : a<=100 ? "good" : "ok";
+  st.offs.push(ms); if (st.offs.length>12) st.offs.shift();
+  const prob = best.j !== "ok" ? articProblem(best, info) : null;
+  if (prob) {
+    best.j = "art"; st.judged++; st.streak = 0; st.artWrong = (st.artWrong||0) + 1;
+    floatText(drum, prob.short, "#FFB547"); setFb("Right time, wrong touch", "#FFB547", "#0E0F12", prob.tip); renderStats(); return;
+  }
+  if (best.a && best.j !== "ok") st.artRight = (st.artRight||0) + 1;
   st.judged++; if (best.j!=="ok") { st.good++; st.streak++; } else st.streak = 0;
   st.best = Math.max(st.best, st.streak);
-  st.offs.push(ms); if (st.offs.length>12) st.offs.shift();
   if (best.j==="perfect") { floatText(drum,"Perfect!","#7BD389"); setFb("Perfect!","#7BD389","#0E0F12", D[drum].name); }
   else if (best.j==="good") { floatText(drum, ms<0?"Good · early":"Good · late","#FFB547"); setFb("Good","#FFB547","#0E0F12", `${D[drum].name} · ${Math.round(a)} ms ${ms<0?"early":"late"}`); }
   else { floatText(drum, ms<0?"Too early":"Too late","#FF8A84"); setFb(ms<0?"Too early":"Too late","#3A3F4A","#F2F2F0", `${D[drum].name} · ${Math.round(a)} ms`); }
@@ -135,14 +159,16 @@ function renderStats(){
 
 /* -------- input -------- */
 let learnFor = null;
-function onHit(drum, vel, ts, src){
-  if (settings.hitSnd || src==="tap" || src==="key") { audio(); playDrum(drum, now(), vel); }
+// info.a: the articulation the input reports (e.g. "open" from the hi-hat's open MIDI note)
+function onHit(drum, vel, ts, src, a){
+  if (settings.hitSnd || src==="tap" || src==="key") { audio(); playDrum(drum, now(), vel, a); }
   flashPiece(drum);
   if (!E.playing) return;
   const lag = Math.max(0, (performance.now() - ts)) / 1000;
   const pos = (E.blocked ? E.posBase : curPos() - lag/E.stepSec()) - (settings.offset/1000)/E.stepSec();
-  if (E.mode==="practice") judge(drum, pos);
-  else if (E.mode==="record") recordHit(drum, pos);
+  const info = { a: a || null, vel: src==="midi" ? vel : null, src };
+  if (E.mode==="practice") judge(drum, pos, info);
+  else if (E.mode==="record") recordHit(drum, pos, info);
 }
 
 /* -------- frame render -------- */
@@ -167,7 +193,11 @@ function updateFrame(force){
   for (const d of DRUMS) {
     const p = pieceEls[d.id]; const lit = litSet.has(d.id);
     p.g.classList.toggle("lit", lit);
-    p.hit.setAttribute("opacity", lit && (d.kind==="drum") ? (E.blocked || ringP[d.id] < 0.25 ? 1 : 0.35) : 0);
+    const art = lit && curEv ? curEv.art[d.id] : null;
+    const label = art ? ARTICS[art].short : "HIT";
+    if (p.hit.textContent !== label) { p.hit.textContent = label; p.hit.setAttribute("font-size", Math.max(art ? 15 : 20, Math.round(d.r*(art ? (label.length > 5 ? 0.26 : 0.32) : 0.42)))); }
+    p.hit.setAttribute("opacity", lit && (d.kind==="drum" || art) ? (E.blocked || ringP[d.id] < 0.25 ? 1 : 0.45) : 0);
+    p.hit.setAttribute("fill", art && d.kind!=="drum" ? "#F2F2F0" : "#0E0F12");
     if (ringP[d.id]!=null) { const k = ringP[d.id]; p.ring.setAttribute("r", d.r*(1+0.85*k)); p.ring.setAttribute("opacity", (1-k*0.75).toFixed(2)); }
     else p.ring.setAttribute("opacity", 0);
     p.next.setAttribute("opacity", nextSet.has(d.id)?0.9:0);
@@ -179,7 +209,7 @@ function updateFrame(force){
     const instr = $("#instr");
     if (E.playing && pos < 0) { const n = Math.floor((pos + C.spb)/4)+1; instr.textContent = `Get ready… ${n}`; }
     else if (E.playing && litSet.size) {
-      const names = [...litSet].map(d=>`<span style="color:${D[d].color}">${D[d].name}</span>`);
+      const names = [...litSet].map(d=>{ const a = curEv && curEv.art[d]; return `<span style="color:${D[d].color}">${D[d].name}${a ? ` <span style="font-size:.7em;opacity:.9">(${ARTICS[a].label.toLowerCase().replace(" hi-hat","")})</span>` : ""}</span>`; });
       instr.innerHTML = "Hit " + (names.length>1 ? names.slice(0,-1).join(", ")+" + "+names[names.length-1]+" together" : "the "+names[0]);
     } else if (E.playing && E.blocked) instr.textContent = "Waiting for you…";
     else if (E.playing && curEv) instr.innerHTML = `Next: <span style="color:${D[curEv.drums[0]].color}">${curEv.drums.map(d=>D[d].name).join(" + ")}</span>`;
@@ -210,7 +240,7 @@ function renderUpNext(cur){
     const row = h("div",{class:"row"+(k===0?" now":"")});
     row.appendChild(h("span",{class:"when"}, k===0?"Now":k===1?"Next":"Then"));
     const chips = h("div",{style:"display:flex;gap:6px;flex-wrap:wrap"});
-    ev.drums.forEach(d=>{ const c=D[d].color; chips.appendChild(h("span",{class:"chip",style: k===0?`background:${c};border-color:${c};color:#0E0F12`:`background:${c}22;border-color:${c}`}, `${esc(D[d].name)} <small>${HAND_SHORT[ev.hands[d]]||""}</small>`)); });
+    ev.drums.forEach(d=>{ const c=D[d].color; chips.appendChild(h("span",{class:"chip",style: k===0?`background:${c};border-color:${c};color:#0E0F12`:`background:${c}22;border-color:${c}`}, `${esc(D[d].name)}${ev.art[d] ? " · "+esc(ARTICS[ev.art[d]].short.toLowerCase()) : ""} <small>${HAND_SHORT[ev.hands[d]]||""}</small>`)); });
     row.appendChild(chips); box.appendChild(row);
   }
 }

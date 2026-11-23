@@ -40,8 +40,8 @@ const FALLBACK = {
 
 // Alesis Nitro Mesh defaults + General MIDI notes, per piece id
 const DEFAULT_MAP = {
-  kick:[36,35], snare:[38,40,37,39], tom1:[48,50], tom2:[45,47], floor:[43,41,58],
-  hihat:[42,46,22,26], hhp:[44], crash:[49,55,57,52], ride:[51,53,59]
+  kick:[36,35], snare:[38,39], tom1:[48,50], tom2:[45,47], floor:[43,41,58],
+  hihat:[42,22], hhp:[44], crash:[49,55,57,52], ride:[51,59]
 };
 // Notes to offer a newly added piece (taken away from whichever piece had them)
 const EXTRA_MAP = { crash2:[57], crash3:[], splash:[55], china:[52], ride2:[59], tom3:[47], tom4:[], floor2:[41], kick2:[], snare2:[], hihat2:[] };

@@ -5,24 +5,33 @@ const sx = (s, spb) => SX0 + s*SW + Math.floor(s/spb)*BARPAD;
 let sheetHead=null, sheetBar=null;
 function renderSheet(){
   const C = E.C, svg = $("#sheet"); svg.innerHTML = "";
-  const W = sx(C.total, C.spb) + 30; svg.setAttribute("width", W); svg.setAttribute("viewBox", `0 0 ${W} 140`);
-  sheetBar = el("rect",{x:0,y:6,width:C.spb*SW+BARPAD,height:128,rx:8,fill:"#FFB547","fill-opacity":0.08},svg);
+  const W = sx(C.total, C.spb) + 30; svg.setAttribute("width", W); svg.setAttribute("height", 176); svg.setAttribute("viewBox", `0 -22 ${W} 176`);
+  sheetBar = el("rect",{x:0,y:-18,width:C.spb*SW+BARPAD,height:170,rx:8,fill:"#FFB547","fill-opacity":0.08},svg);
   for (let i=0;i<5;i++) el("line",{x1:16,x2:W-20,y1:40+i*12,y2:40+i*12,stroke:"#4A4F5A","stroke-width":1.2},svg);
   el("rect",{x:20,y:52,width:4,height:24,fill:"#C9CDD4"},svg); el("rect",{x:28,y:52,width:4,height:24,fill:"#C9CDD4"},svg);
   for (let b=0;b<=C.song.bars;b++){ const x = sx(b*C.spb, C.spb) - (b? BARPAD/2 + SW/2 : 12); el("line",{x1:x,x2:x,y1:40,y2:88,stroke:"#7A808C","stroke-width": b===C.song.bars?3:1.4},svg); if (b<C.song.bars){ const t=el("text",{x:x+4,y:20,fill:"#8C929D","font-size":11,"font-family":"JetBrains Mono, monospace"},svg); t.textContent=b+1; } }
   // notes per beat groups
   const up = new Map(), down = new Map();
   for (const ev of C.events) for (const d of ev.drums) { const m = D[d].hand ? up : down; if(!m.has(ev.s)) m.set(ev.s,[]); m.get(ev.s).push(d); }
-  const drawHead = (d, x) => {
-    const y = D[d].staff, col = "#F2F2F0";
+  const artAt = new Map(); for (const ev of C.events) for (const d in ev.art) artAt.set(ev.s+"|"+d, ev.art[d]);
+  const marks = new Map(); // "step|up" -> [sign…] drawn above (hands) or below (feet) the notes
+  const txt = (x, y, t, size, anchor) => { const e = el("text",{x,y,"text-anchor":anchor||"middle","font-size":size||13,"font-weight":700,fill:"#F2F2F0","font-family":"Inter, sans-serif"},svg); e.textContent = t; return e; };
+  const drawHead = (d, x, s, isUp) => {
+    const y = D[d].staff, col = "#F2F2F0", a = artAt.get(s+"|"+d);
     if (y < 40 || y > 88) { for (let ly = y<40?28:100; y<40 ? ly>=y : ly<=y; ly += y<40?-12:12) if (ly%12===4) el("line",{x1:x-9,x2:x+9,y1:ly,y2:ly,stroke:"#7A808C","stroke-width":1.2},svg); }
-    if (D[d].x) { el("path",{d:`M${x-5} ${y-5}L${x+5} ${y+5}M${x+5} ${y-5}L${x-5} ${y+5}`,stroke:col,"stroke-width":2},svg); if (d==="crash") el("circle",{cx:x,cy:y,r:8,fill:"none",stroke:col,"stroke-width":1.3},svg); }
+    if (a === "bell") el("path",{d:`M${x-6} ${y}L${x} ${y-6}L${x+6} ${y}L${x} ${y+6}Z`,fill:"none",stroke:col,"stroke-width":2},svg);       // ride bell: diamond
+    else if (D[d].x || a === "xstick") { el("path",{d:`M${x-5} ${y-5}L${x+5} ${y+5}M${x+5} ${y-5}L${x-5} ${y+5}`,stroke:col,"stroke-width":2},svg); if (D[d].type==="crash" || a === "xstick") el("circle",{cx:x,cy:y,r:8,fill:"none",stroke:col,"stroke-width":1.3},svg); }
     else el("ellipse",{cx:x,cy:y,rx:6,ry:4.5,fill:col,transform:`rotate(-20 ${x} ${y})`},svg);
+    if (a === "ghost") { txt(x-11, y+5, "(", 15); txt(x+11, y+5, ")", 15); }
+    if (a === "rim") el("line",{x1:x-9,y1:y+6,x2:x+9,y2:y-6,stroke:col,"stroke-width":1.6},svg);                                        // slashed head
+    if (a === "flam") { el("ellipse",{cx:x-12,cy:y-1,rx:3.4,ry:2.6,fill:col,transform:`rotate(-20 ${x-12} ${y-1})`},svg); el("line",{x1:x-9,y1:y-2,x2:x-9,y2:y-15,stroke:col,"stroke-width":1},svg); el("line",{x1:x-13,y1:y-6,x2:x-5,y2:y-13,stroke:col,"stroke-width":1},svg); }
+    if (a === "choke") txt(x+13, y+4, "+", 13);
+    if (a === "accent" || a === "open") { const k = s+"|"+isUp; if (!marks.has(k)) marks.set(k, []); marks.get(k).push(a === "accent" ? ">" : "o"); }
   };
   const beams = (map, isUp) => {
     const groups = new Map();
     for (const [s, ds] of map) {
-      const x = sx(s, C.spb); ds.forEach(d=>drawHead(d,x));
+      const x = sx(s, C.spb); ds.forEach(d=>drawHead(d,x,s,isUp));
       const ys = ds.map(d=>D[d].staff);
       const tip = isUp ? 6 : 128, root = isUp ? Math.max(...ys) : Math.min(...ys);
       const stx = isUp ? x+5 : x-5;
@@ -40,7 +49,9 @@ function renderSheet(){
     }
   };
   beams(up,true); beams(down,false);
-  sheetHead = el("line",{x1:0,x2:0,y1:8,y2:132,stroke:"#FFB547","stroke-width":2.5},svg);
+  for (const [k, signs] of marks) { const [s, isUp] = k.split("|"); const x = sx(+s, C.spb) + (isUp === "true" ? 5 : -5);
+    [...new Set(signs)].forEach((g, i) => txt(x, isUp === "true" ? -4 - i*12 : 146 + i*12, g, g === ">" ? 14 : 12)); }
+  sheetHead = el("line",{x1:0,x2:0,y1:-16,y2:150,stroke:"#FFB547","stroke-width":2.5},svg);
   moveSheetHead(0);
 }
 function moveSheetHead(pos){

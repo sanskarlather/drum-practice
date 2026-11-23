@@ -3,7 +3,8 @@
 function compile(song){
   const spb = (song.beats||4)*4, total = song.bars*spb;
   const bySt = new Map();
-  for (const n0 of song.notes) { const n = {s:n0.s, d:resolveDrum(n0.d)}; if (n.s<0||n.s>=total||!n.d) continue; if(!bySt.has(n.s)) bySt.set(n.s,new Set()); bySt.get(n.s).add(n.d); }
+  const art = new Map(); // "step|drum" -> articulation
+  for (const n0 of song.notes) { const n = {s:n0.s, d:resolveDrum(n0.d)}; if (n.s<0||n.s>=total||!n.d) continue; if(!bySt.has(n.s)) bySt.set(n.s,new Set()); bySt.get(n.s).add(n.d); if (n0.a && articFits(n0.a, n.d)) art.set(n.s+"|"+n.d, n0.a); }
   const steps = [...bySt.keys()].sort((a,b)=>a-b);
   const events = []; let alt = 0;
   for (const s of steps) {
@@ -26,7 +27,7 @@ function compile(song){
     events.push({s, drums, hands, notes:[]});
   }
   const notes = [];
-  events.forEach((ev,i)=> ev.drums.forEach(d=>{ const n={s:ev.s,d,ev:i,j:null}; ev.notes.push(n); notes.push(n); }));
+  events.forEach((ev,i)=> { ev.art = {}; ev.drums.forEach(d=>{ const a = art.get(ev.s+"|"+d) || null; if (a) ev.art[d] = a; const n={s:ev.s,d,a,ev:i,j:null}; ev.notes.push(n); notes.push(n); }); });
   const stepMap = new Map(events.map((e,i)=>[e.s,i]));
   return {song, spb, total, events, notes, stepMap};
 }

@@ -23,7 +23,7 @@ HARNESS = r"""
 async (opts) => {
   // render each lesson as a printed 2-bar staff, stack them on a white page
   const svgs = [];
-  for (const L of LESSONS) {
+  for (const L of LESSONS.slice(0, 10)) {
     E.C = compile(L); renderSheet();
     const s = document.querySelector('#sheet').cloneNode(true);
     s.querySelectorAll('rect[fill-opacity]').forEach(r=>r.remove());
@@ -34,12 +34,12 @@ async (opts) => {
     s.setAttribute('xmlns','http://www.w3.org/2000/svg');
     svgs.push({src:new XMLSerializer().serializeToString(s), w:+s.getAttribute('width')});
   }
-  const W = opts.W || 1700, scale = (W-120)/svgs[0].w, rowH = 140*scale + 40;
+  const W = opts.W || 1700, scale = (W-120)/svgs[0].w, rowH = 176*scale + 40;
   const c = document.createElement('canvas'); c.width = W; c.height = Math.ceil(60 + rowH*svgs.length);
   const x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0,0,c.width,c.height);
   for (let i=0;i<svgs.length;i++) {
     const img = new Image(); img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svgs[i].src);
-    await img.decode(); x.drawImage(img, 60, 30 + i*rowH, svgs[i].w*scale, 140*scale);
+    await img.decode(); x.drawImage(img, 60, 30 + i*rowH, svgs[i].w*scale, 176*scale);
   }
   let page = c;
   if (opts.photo) { // rotate, blur, uneven light, noise
@@ -54,7 +54,7 @@ async (opts) => {
   const res = srOfflineRead([page], 4);
   // compare bar by bar: lesson i occupies bars 2i, 2i+1
   const out = []; let tp=0, fp=0, fn=0;
-  LESSONS.forEach((L, i) => {
+  LESSONS.slice(0, 10).forEach((L, i) => {
     const want = new Set(L.notes.map(n=>(n.s + i*32)+'|'+n.d));
     const got = new Set(res.notes.filter(n=>n.s>=i*32 && n.s<(i+1)*32).map(n=>n.s+'|'+n.d));
     let a=0,b=0,cmiss=0; for (const k of got) want.has(k)?a++:b++; for (const k of want) if(!got.has(k)) cmiss++;
@@ -150,6 +150,19 @@ async def main():
         # model list (used by Test key / Load models) for Gemini
         await pg.evaluate("""()=>{ window.fetch = async (url, o) => new Response(JSON.stringify({models:[{name:'models/gemini-3.8-flash',supportedGenerationMethods:['generateContent']},{name:'models/gemini-3.8-flash-tts',supportedGenerationMethods:['generateContent']},{name:'models/text-embedding-9',supportedGenerationMethods:['embedContent']}]}),{status:200}); }""")
         ids = await pg.evaluate("srListModels('gemini','k')")
+        # "Load models" fills a drop-down with every model (not filtered by what's already chosen)
+        await pg.evaluate("""()=>{ settings.ai.provider='openrouter'; settings.ai.keys.openrouter='k'; srRenderSettings();
+          window.fetch = async () => new Response(JSON.stringify({data:[{id:'a/one:free'},{id:'b/two:free'},{id:'c/three'}]}),{status:200}); }""")
+        await pg.click("nav.main button[data-view=library]"); await pg.click("#aiLoad"); await pg.wait_for_timeout(300)
+        opts = await pg.evaluate("[...document.querySelectorAll('#aiModelSel option')].map(o=>o.value)")
+        check("Load models lists every model in the drop-down", all(m in opts for m in ["a/one:free", "b/two:free", "c/three", "openrouter/free"]), str(opts))
+        await pg.select_option("#aiModelSel", "b/two:free")
+        check("picking a model from the drop-down saves it", await pg.evaluate("srModel('openrouter')") == "b/two:free")
+        await pg.select_option("#aiModelSel", "__type"); await pg.fill("#aiModel", "x/typed-model"); await pg.press("#aiModel", "Tab")
+        check("a model name can still be typed", await pg.evaluate("srModel('openrouter')") == "x/typed-model")
+        await pg.click("nav.main button[data-view=practice]")
+        await pg.evaluate("settings.ai.models.openrouter=''; settings.ai.provider='gemini'")
+        await pg.evaluate("""()=>{ window.fetch = async (url, o) => new Response(JSON.stringify({models:[{name:'models/gemini-3.8-flash',supportedGenerationMethods:['generateContent']},{name:'models/gemini-3.8-flash-tts',supportedGenerationMethods:['generateContent']},{name:'models/text-embedding-9',supportedGenerationMethods:['embedContent']}]}),{status:200}); }""")
         check("Gemini model list keeps usable models only", ids == ["gemini-3.8-flash"], str(ids))
         # Gemini free-tier limit message
         await pg.evaluate("window.fetch = async ()=> new Response(JSON.stringify({error:{code:429,message:'Resource has been exhausted',status:'RESOURCE_EXHAUSTED'}}),{status:429}); settings.ai.provider='gemini'")

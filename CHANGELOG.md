@@ -2,6 +2,20 @@
 
 All notable changes to this project. Dates are YYYY-MM-DD.
 
+## [0.4.0] - 2026-11-23
+### Added
+- **Articulations everywhere**: open vs closed hi-hat, accents, ghost notes, rimshots, cross-stick, ride bell, flams and chokes.
+  - Shown on the practice kit (OPEN, ACCENT, GHOST…), in the instruction and *Coming up*, and in proper notation (`>`, `o`, `( )`, diamonds, slashed heads, grace notes).
+  - Checked while you play: open/closed hi-hat, rim and bell from the e-kit's notes; accents and ghost notes from velocity (adjustable levels); "Right time, wrong touch" feedback with a tip; Wait for me waits until it's right; can be switched off.
+  - Pad mapping rows for the special strokes (Nitro Mesh defaults: open hi-hat 46, rimshot 40, cross-stick 37, bell 53); Shift + key on the keyboard.
+  - Microphone mode can be taught the special strokes and judges accents/ghost notes by loudness.
+  - Note editor articulation tools; Record from kit keeps them.
+  - Kept by MIDI and MusicXML import and by the AI sheet reader (drum-tab characters).
+  - Distinct sounds for each.
+- Lessons 11 to 15: accents, open hi-hat, ghost notes, cross-stick and ride bell, flams and rimshots.
+### Fixed
+- The Model box only showed the already-chosen model after **Load models**. It's now a drop-down listing every loaded model (remembered per provider), with an option to type a name.
+
 ## [0.3.2] - 2026-11-23
 ### Fixed
 - AI reader answers were too long for free models ("answer was cut off"). The AI now answers in compact drum-tab lines, one page per request, with "thinking" kept low; partial answers are kept instead of failing.

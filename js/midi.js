@@ -35,26 +35,39 @@ function updateInputPill(){
   p.className = "pill " + cls; $("#midiText").textContent = txt;
   const q = $("#quickMic"); if (q) { q.textContent = MIC.on ? "Microphone on · turn off" : "Listen with microphone"; q.className = MIC.on ? "btn on" : "btn"; }
 }
-function noteToDrum(n){ for (const d of DRUMS) if ((settings.map[d.id]||[]).includes(n)) return d.id; return GM[n] ? resolveDrum(GM[n]) : null; }
+// -> {d, a}: the piece and, for variant notes (open hi-hat, rimshot, cross-stick, ride bell), the articulation
+function noteToDrum(n){
+  for (const d of DRUMS) for (const a of variantsFor(d.id)) if ((settings.map[variantKey(d.id, a)]||[]).includes(n)) return { d: d.id, a };
+  for (const d of DRUMS) if ((settings.map[d.id]||[]).includes(n)) return { d: d.id, a: null };
+  const g = GM_ARTIC[n]; if (g) { const d = resolveDrum(g.d); return d ? { d, a: articFits(g.a, d) ? g.a : null } : null; }
+  return GM[n] ? { d: resolveDrum(GM[n]), a: null } : null;
+}
+const GM_ARTIC = { 46:{d:"hihat",a:"open"}, 26:{d:"hihat",a:"open"}, 37:{d:"snare",a:"xstick"}, 40:{d:"snare",a:"rim"}, 53:{d:"ride",a:"bell"} };
 function onMidi(e){
   const [st, n, v] = e.data; if ((st & 0xF0) !== 0x90 || !v) return;
   $("#lastNote").textContent = `${n} (velocity ${v})`;
   if (learnFor) {
     for (const k in settings.map) settings.map[k] = (settings.map[k]||[]).filter(x=>x!==n);
-    settings.map[learnFor].unshift(n); saveSettings(); toast(`Note ${n} now plays ${D[learnFor].name}`); learnFor=null; renderMap(); return;
+    (settings.map[learnFor] = settings.map[learnFor] || []).unshift(n); saveSettings();
+    const [pid, va] = learnFor.split(":"); toast(`Note ${n} now plays ${D[pid].name}${va ? " (" + articLabel(va).toLowerCase() + ")" : ""}`); learnFor=null; renderMap(); return;
   }
-  const d = noteToDrum(n);
-  highlightMapRow(d);
-  if (d) onHit(d, v/127, e.timeStamp || performance.now(), "midi");
+  const r = noteToDrum(n);
+  $("#lastNote").textContent = `${n} (velocity ${v})` + (r && r.d ? ` → ${D[r.d] ? D[r.d].name : r.d}${r.a ? " · " + articLabel(r.a).toLowerCase() : ""}` : "");
+  if (r) highlightMapRow(r.a ? variantKey(r.d, r.a) : r.d);
+  if (r && r.d) onHit(r.d, v/127, e.timeStamp || performance.now(), "midi", r.a);
 }
 function renderMap(){
   const box = $("#mapRows"); box.innerHTML="";
-  for (const d of DRUMS){
-    const r = h("div",{class:"maprow","data-d":d.id});
-    r.innerHTML = `<span class="n"><i style="background:${d.color}"></i>${esc(d.name)}</span><span class="notes">${(settings.map[d.id]||[]).join(", ")||"—"}</span>`;
-    const b = h("button",{class:"btn",type:"button"}, learnFor===d.id ? "Hit the pad…" : "Learn");
-    b.onclick = ()=>{ learnFor = learnFor===d.id ? null : d.id; renderMap(); };
+  const row = (key, label, color, sub) => {
+    const r = h("div",{class:"maprow"+(sub?" sub":""),"data-d":key});
+    r.innerHTML = `<span class="n"><i style="background:${color}${sub?";opacity:.5":""}"></i>${esc(label)}</span><span class="notes">${(settings.map[key]||[]).join(", ")||"—"}</span>`;
+    const b = h("button",{class:"btn",type:"button"}, learnFor===key ? "Hit the pad…" : "Learn");
+    b.onclick = ()=>{ learnFor = learnFor===key ? null : key; renderMap(); };
     r.appendChild(b); box.appendChild(r);
+  };
+  for (const d of DRUMS){
+    row(d.id, d.name, d.color, false);
+    for (const a of variantsFor(d.id)) row(variantKey(d.id, a), `${d.name}: ${articLabel(a).replace(/^Ride bell$/,"bell").replace(/^Open hi-hat$/,"open").toLowerCase()}`, d.color, true);
   }
 }
 function highlightMapRow(d){ const r = document.querySelector(`.maprow[data-d="${d}"]`); if (!r) return; r.classList.add("lit"); setTimeout(()=>r.classList.remove("lit"),200); }
@@ -64,7 +77,8 @@ document.addEventListener("keydown", e=>{
   if (e.key==="Enter" && e.target.closest("button,a")) return;
   if (e.key===" " && e.target.closest("#grid")) return;
   const k = e.key.toLowerCase(); const d = DRUMS.find(x=>x.key===k);
-  if (d) { e.preventDefault(); audio(); onHit(d.id, 0.9, performance.now(), "key"); }
+  // Shift + key = the piece's special stroke (open hi-hat, rimshot, ride bell)
+  if (d) { e.preventDefault(); audio(); const v = e.shiftKey ? variantsFor(d.id)[0] || null : null; onHit(d.id, 0.9, performance.now(), "key", v); }
   else if (k==="enter" && !$("#view-practice").hidden) { e.preventDefault(); togglePlay(); }
 });
 

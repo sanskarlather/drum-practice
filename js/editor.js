@@ -19,27 +19,51 @@ function renderGrid(){
   g.style.gridTemplateColumns = `112px repeat(${total}, minmax(26px, 1fr))`; g.innerHTML = "";
   g.appendChild(h("div",{class:"rh",style:"border-top:0"},""));
   for (let s=0;s<total;s++){ const i=s%spb; const lab = i%4===0 ? (i===0?`${Math.floor(s/spb)+1}.1`:String(i/4+1)) : i%4===2 ? "&" : "·"; g.appendChild(h("div",{class:"hd"+(i%4===0?" b":"")+(i===0?" bar":"")},lab)); }
-  const on = new Set(ED.notes.map(n=>n.s+"|"+n.d));
+  const on = new Map(ED.notes.map(n=>[n.s+"|"+n.d, n.a || ""]));
   for (const d of edRows()){
     const dd = D[d];
     g.appendChild(h("div",{class:"rh"},`<i style="background:${dd.color}"></i>${esc(dd.name)}`));
     for (let s=0;s<total;s++){
-      const i = s%spb; const cls = "c" + (Math.floor(i/4)%2?" alt":"") + (i===0?" barl":i%4===0?" beat":"") + (on.has(s+"|"+d)?" on":"");
-      const b = h("button",{class:cls,type:"button","data-s":s,"data-d":d,style:`--col:${dd.color}`,"aria-label":`${dd.name}, bar ${Math.floor(s/spb)+1}, step ${i+1}`,"aria-pressed":on.has(s+"|"+d)});
+      const i = s%spb, k = s+"|"+d, a = on.get(k) || "";
+      const cls = "c" + (Math.floor(i/4)%2?" alt":"") + (i===0?" barl":i%4===0?" beat":"") + (on.has(k)?" on":"");
+      const b = h("button",{class:cls,type:"button","data-s":s,"data-d":d,"data-a":a,"data-art":a ? ARTICS[a].sign : "",style:`--col:${dd.color}`,"aria-label":`${dd.name}, bar ${Math.floor(s/spb)+1}, step ${i+1}${a ? ", "+ARTICS[a].label : ""}`,"aria-pressed":on.has(k)});
       g.appendChild(b);
     }
   }
 }
-let paint = null;
-function setCell(b, val){
-  const s = +b.dataset.s, d = b.dataset.d; const has = b.classList.contains("on");
-  if (val === has) return;
-  b.classList.toggle("on", val); b.setAttribute("aria-pressed", val);
-  if (val) { ED.notes.push({s,d}); audio(); playDrum(d, now(), 0.7); } else ED.notes = ED.notes.filter(n=>!(n.s===s && n.d===d));
+// The tool picked above the grid: "normal" or an articulation (accent, ghost, open…)
+let edTool = "normal", paint = null;
+function edToolbar(){
+  const box = $("#edArt"); box.innerHTML = "";
+  for (const [k, label] of [["normal","Normal"], ...Object.entries(ARTICS).map(([k, A]) => [k, `${A.sign} ${A.label}`])]) {
+    const b = h("button", { type:"button", "aria-pressed": String(k === edTool), title: k === "normal" ? "A normal hit" : ARTICS[k].tip }, esc(label));
+    b.onclick = () => { edTool = k; edToolbar(); }; box.appendChild(b);
+  }
 }
-$("#grid").addEventListener("pointerdown", e=>{ const b = e.target.closest(".c"); if (!b) return; e.preventDefault(); paint = !b.classList.contains("on"); setCell(b, paint); });
-$("#grid").addEventListener("pointerover", e=>{ if (paint==null || !(e.buttons&1)) return; const b = e.target.closest(".c"); if (b) setCell(b, paint); });
-$("#grid").addEventListener("keydown", e=>{ const b = e.target.closest(".c"); if (b && (e.key===" "||e.key==="Enter")) { e.preventDefault(); setCell(b, !b.classList.contains("on")); } });
+function edNote(s, d){ return ED.notes.find(n=>n.s===s && n.d===d); }
+function setCellArt(b, a){ b.dataset.a = a || ""; b.dataset.art = a ? ARTICS[a].sign : ""; }
+// action: "add" | "remove" | "art"
+function setCell(b, action){
+  const s = +b.dataset.s, d = b.dataset.d, n = edNote(s, d);
+  const a = edTool !== "normal" && articFits(edTool, d) ? edTool : null;
+  if (action === "remove") { if (!n) return; ED.notes = ED.notes.filter(x=>x!==n); b.classList.remove("on"); b.setAttribute("aria-pressed", false); setCellArt(b, null); return; }
+  if (action === "add" && n) return;
+  if (action === "art" && !n) return;
+  if (edTool !== "normal" && !a && !edWarned[edTool]) { edWarned[edTool] = 1; toast(`${ARTICS[edTool].label} doesn't apply to the ${D[d].name.toLowerCase()}; added a normal hit`); }
+  if (n) { if (a) n.a = a; else delete n.a; } else ED.notes.push(a ? {s,d,a} : {s,d});
+  b.classList.add("on"); b.setAttribute("aria-pressed", true); setCellArt(b, a);
+  audio(); playDrum(d, now(), 0.7, a);
+}
+const edWarned = {};
+function edAction(b){
+  const n = edNote(+b.dataset.s, b.dataset.d);
+  if (!n) return "add";
+  const a = edTool !== "normal" && articFits(edTool, b.dataset.d) ? edTool : null;
+  return (n.a || null) === a ? "remove" : "art";
+}
+$("#grid").addEventListener("pointerdown", e=>{ const b = e.target.closest(".c"); if (!b) return; e.preventDefault(); paint = edAction(b); setCell(b, paint); });
+$("#grid").addEventListener("pointerover", e=>{ if (paint==null || !(e.buttons&1)) return; const b = e.target.closest(".c"); if (b) setCell(b, paint === "art" ? (edNote(+b.dataset.s, b.dataset.d) ? "art" : "add") : paint); });
+$("#grid").addEventListener("keydown", e=>{ const b = e.target.closest(".c"); if (b && (e.key===" "||e.key==="Enter")) { e.preventDefault(); setCell(b, edAction(b)); } });
 window.addEventListener("pointerup", ()=>paint=null);
 function readEdFields(){
   ED.title = $("#edTitle").value.trim() || "Untitled";
@@ -47,7 +71,7 @@ function readEdFields(){
   const bars = Math.max(1, Math.min(32, +$("#edBars").value || 1)), beats = +$("#edBeats").value;
   if (bars !== ED.bars || beats !== ED.beats) {
     const oldSpb = edSpb(), newSpb = beats*4;
-    ED.notes = ED.notes.filter(n=>n.s%oldSpb < newSpb).map(n=>({s: Math.floor(n.s/oldSpb)*newSpb + n.s%oldSpb, d:n.d}));
+    ED.notes = ED.notes.filter(n=>n.s%oldSpb < newSpb).map(n=>Object.assign({}, n, {s: Math.floor(n.s/oldSpb)*newSpb + n.s%oldSpb}));
     ED.bars = bars; ED.beats = beats; ED.notes = ED.notes.filter(n=>n.s < bars*beats*4); renderGrid();
   }
 }
@@ -57,9 +81,15 @@ $("#edSave").onclick = ()=>{ readEdFields(); saveSong(JSON.parse(JSON.stringify(
 $("#edPractise").onclick = ()=>{ readEdFields(); const s = JSON.parse(JSON.stringify(ED)); saveSong(s); loadSong(s); show("practice"); };
 $("#edPlay").onclick = ()=>{ if (E.mode==="preview" && E.playing) { stop(); return; } readEdFields(); stop(); E.mode="preview"; E.C = compile(ED); E.bpm = ED.bpm; start(0); $("#edPlay").textContent="Stop"; };
 $("#edRec").onclick = ()=>{ if (E.mode==="record" && E.playing) { stop(); return; } readEdFields(); stop(); E.mode="record"; E.C = compile(ED); E.bpm = ED.bpm; start(0); $("#edRec").querySelector("span").textContent="Stop recording"; toast("Count-in: 4 clicks, then play"); };
-function recordHit(d, pos){
+// Recording keeps how you played: open hi-hat / rimshot / bell from the pad, accents and ghost notes from how hard you hit.
+function recordHit(d, pos, info){
   const total = ED.bars*edSpb(); let s = Math.round(pos); if (s<0 && s>-0.5) s=0; if (s<0 || s>=total) return;
-  if (!ED.notes.some(n=>n.s===s && n.d===d)) { ED.notes.push({s,d}); const b = document.querySelector(`#grid .c[data-s="${s}"][data-d="${d}"]`); if (b) { b.classList.add("on"); b.setAttribute("aria-pressed",true); } }
+  let a = info && info.a && articFits(info.a, d) ? info.a : null;
+  if (!a && info && info.vel != null) { if (info.vel >= settings.vel.accent/127) a = "accent"; else if (info.vel <= settings.vel.ghost/127 && articFits("ghost", d)) a = "ghost"; }
+  if (!ED.notes.some(n=>n.s===s && n.d===d)) {
+    ED.notes.push(a ? {s,d,a} : {s,d});
+    const b = document.querySelector(`#grid .c[data-s="${s}"][data-d="${d}"]`); if (b) { b.classList.add("on"); b.setAttribute("aria-pressed",true); setCellArt(b, a); }
+  }
 }
 let edHeadCol = -1;
 function edPlayhead(pos){

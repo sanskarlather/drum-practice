@@ -44,6 +44,7 @@ It runs entirely in the browser: there is no server or account, and nothing you 
 - A plain-language instruction ("Hit Snare + Hi-hat together"), a big 1 & 2 & 3 & 4 & counter and a "Coming up" list.
 - Feedback on every hit: Perfect, Good (early/late), Too early, Too late, Miss, Wrong drum?
 - Accuracy, streak, misses and an early/late timing meter.
+- **Articulations are taught and checked**, not simplified: open vs closed hi-hat, accents, ghost notes, rimshots, cross-stick, flams, ride bell and cymbal chokes. The kit shows "OPEN", "ACCENT", "GHOST"… on the drum, the notation draws them properly, and your playing is checked: the open-hi-hat and rim notes your kit sends, and how hard you hit for accents and ghost notes.
 - **Wait for me** mode: the song pauses until you hit the right drum.
 - Loop, tempo slider (30-200 BPM), 4-click count-in.
 - Optional simplified drum notation that scrolls with the music.
@@ -54,7 +55,7 @@ It runs entirely in the browser: there is no server or account, and nothing you 
 - Built-in drum sounds for when your module is muted (or for tap mode).
 
 **Music**
-- 10 built-in beginner lessons, from "hi-hat only" to fills around the toms.
+- 15 built-in lessons, from "hi-hat only" to fills around the toms, accents, open hi-hats, ghost notes, cross-stick with ride bell, flams and rimshots.
 - Import **MIDI** (`.mid`) and **MusicXML** (`.musicxml`, `.xml`) files.
 - **Read a PDF or photo of drum sheet music automatically**, with the AI reader (your own key from Google Gemini, Groq, OpenRouter, Anthropic Claude or any OpenAI-compatible service; Gemini, Groq and OpenRouter have free options, and a local Ollama/LM Studio model is free and private) or the free offline reader.
 - A **note editor**: click a grid, or **record from your kit** after a count-in.
@@ -78,6 +79,7 @@ It runs entirely in the browser: there is no server or account, and nothing you 
 Then:
 1. Go to **Library** and pick **1 · Meet the hi-hat**.
 2. Press the big play button (or Enter). You'll hear four count-in clicks.
+   (Hold **Shift** with a key for the special stroke: Shift+A = open hi-hat, Shift+S = rimshot, Shift+H = ride bell.)
 3. Hit the glowing drum when the ring reaches it.
 
 No kit handy? Tap the drums on screen, or use the keys: `A` hi-hat, `S` snare, `Space` kick, `D`/`F` toms, `G` floor tom, `Q` crash, `H` ride, `Z` hi-hat pedal.
@@ -133,6 +135,28 @@ In **Library**, choose **PDF or photo** (or drop the file on the page). The app 
 
 The offline reader marks what it found on the page (circles around notes, blue barlines, bar numbers), so you can spot mistakes quickly. Either way, always check the result before practising.
 
+## Articulations (how each note is played)
+
+Playing the right drum at the right time is only half of drumming; *how* you hit it matters too. The app keeps these apart everywhere: lessons, imports, the sheet readers, the editor, the practice display and the judging.
+
+| Articulation | On the kit display | In the notation | How it's checked |
+|---|---|---|---|
+| Open hi-hat | OPEN | `o` above the hi-hat | Your kit sends a different note (Nitro Mesh: 46 open, 42 closed). Closed where open is written, or open where closed is written, is marked wrong |
+| Accent | ACCENT | `>` | Velocity at or above the *Accent* level (default 96) |
+| Ghost note | GHOST | note in `( )` | Velocity at or below the *Ghost note* level (default 55) |
+| Rimshot | RIM | slashed notehead | The pad's rim note (Nitro Mesh snare rim: 40) |
+| Cross-stick | X-STICK | circled x on the snare line | The cross-stick note (General MIDI 37), if your kit sends one |
+| Ride bell | BELL | diamond notehead | The bell note (53), if your ride pad has a bell zone |
+| Flam | FLAM | small grace note | Shown and played; not checked (it's two hits a few ms apart) |
+| Choke | CHOKE | `+` | Shown and played; not checked |
+
+- When a hit is on time but played the wrong way, it's graded **"Right time, wrong touch"** with a tip (e.g. "Lift your left foot so the hi-hat rings") and breaks your streak. **Wait for me** waits until it's played right.
+- Turn checking off with **Check how I play each note** in the Sounds panel, while you're learning the notes.
+- Set the accent and ghost-note levels in **Kit setup → Accents and ghost notes**. *Last note received* shows the velocity of each hit, so you can find your levels.
+- Pad mapping has extra rows for the special strokes (Hi-hat: open, Snare: rimshot, Snare: cross-stick, Ride: bell), each with **Learn**.
+- In microphone mode you can also teach the open hi-hat, rimshot, cross-stick and ride bell; accents and ghost notes are judged by loudness compared with your normal hits.
+- MIDI files keep open hi-hat (46), cross-stick (37) and ride bell (53), and accents and ghost notes from velocity. MusicXML keeps accents, ghost notes (parenthesised noteheads), open hi-hat and flams (grace notes). The AI reader writes them in its drum tab. The **offline reader doesn't detect articulations**; add them in the editor.
+
 ## Customising your kit
 
 In **Kit setup → Your kits**:
@@ -175,7 +199,7 @@ The offline sheet reader works everywhere; the AI reader needs an internet conne
 - The note grid is 16th notes only. Triplets, swing and grace notes are rounded to the nearest 16th.
 - 4/4 and 3/4 only in the editor.
 - Compressed MusicXML (`.mxl`) isn't supported.
-- No accents, ghost notes or open/closed hi-hat distinction yet: any hi-hat pad counts as hi-hat.
+- Flams and chokes are shown and played but not checked. Microphone mode only tells open and closed hi-hat (and rimshot, bell) apart if you've taught both, and only roughly.
 - Microphone drum identification can confuse similar-sounding drums (see above).
 - Songs are stored in this browser only. Clearing site data deletes them, and they don't sync between your laptop and phone.
 
@@ -186,6 +210,7 @@ index.html            Page layout for all four screens
 css/styles.css        All styling
 js/                   Plain scripts, loaded in this order:
   data.js             Piece types, default MIDI notes, fallbacks between pieces
+  artic.js            Articulations: open hi-hat, accent, ghost, rimshot, cross-stick, bell, flam, choke
   storage.js          Saved settings, songs and best scores (localStorage)
   lessons.js          The 10 built-in lessons
   util.js             Small DOM helpers
@@ -236,6 +261,7 @@ If you use or adapt this code, please check it yourself rather than assuming it'
 | Offline sheet reader | Passed on sheets drawn by the app (clean, photo-like, PDF) | _Not yet_ (try real sheet music) |
 | AI sheet reader (Gemini, OpenRouter, Claude, OpenAI-compatible) | Requests/answers checked with stand-ins for each API; **never run against a real API** | _Not yet_ (needs your key) |
 | Kit customisation | Passed | _Not yet_ |
+| Articulations (open hi-hat, accents, ghost notes…) | Passed (26 checks, simulated MIDI) | _Not yet_ (check open/closed and rim notes on your kit) |
 
 Update this table as you work through [docs/TESTING.md](docs/TESTING.md).
 

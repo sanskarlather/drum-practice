@@ -23,8 +23,9 @@ Both matter. Passing automated tests does **not** mean the app works well with y
 | Mic detection | 42 synthesised kick/snare/hi-hat hits, including hi-hats right after kicks, fed in as a fake microphone | Passed: 42/42 detected, 0 false hits, 18/18 single drums identified, 24/24 combinations accepted, 3/3 wrong drums rejected, timing within ~1 ms (AudioWorklet) and ~10 ms (file:// fallback) |
 | Offline sheet reader | All 10 lessons drawn as printed notation on one page, read back and compared note by note | Clean page: 198/198 notes, 0 wrong. Rotated 1.5°, blurred, unevenly lit: 197/198, 0 wrong. Smaller print (1000 px page): 198/198 |
 | PDF import | `samples/rock-beat-sheet.pdf` through the Library with PDF.js and the offline reader | Passed: 48/48 notes, 4 bars |
-| AI sheet reader | With **stand-ins** for the Gemini, Groq, OpenRouter, Claude and an OpenAI-compatible API: endpoint, key in a header (never the URL), image sent, low reasoning on OpenRouter; drum-tab answers → notes (incl. dashes, bar marks, short lines, 3/4, no BAR line, unreadable); cut-off answer, retry without reasoning, wrong-provider key, Gemini model filtering, free-tier wait-and-retry, rejected key | Passed (33 checks). **Not tested against any real API** (no keys during development) |
+| AI sheet reader | With **stand-ins** for the Gemini, Groq, OpenRouter, Claude and an OpenAI-compatible API: endpoint, key in a header (never the URL), image sent, low reasoning on OpenRouter; drum-tab answers → notes (incl. dashes, bar marks, short lines, 3/4, no BAR line, unreadable); cut-off answer, retry without reasoning, wrong-provider key, Gemini model filtering, free-tier wait-and-retry, rejected key, model drop-down | Passed (36 checks). **Not tested against any real API** (no keys during development) |
 | Kits | Presets; add tom/crash/kick; MIDI note moves to the new crash; second kick = left foot; drag a piece; per-kit pad mapping; fallback (tom2 → tom1 on a small kit); survives reload; remove a piece; big kit practice | Passed (14 checks) |
+| Articulations | Lessons; judging with simulated MIDI (open played closed and vice versa, soft accents, ghost notes, checking switched off, Wait for me); kit label; notation marks; editor tools; recording; MIDI/MusicXML/AI-tab import; pad-mapping rows and note numbers; microphone loudness | Passed (26 checks) |
 | Layout | Desktop (1440 px) and phone (390 px) screenshots checked by eye | Passed |
 | Console | No JavaScript errors on any screen | Passed |
 
@@ -47,6 +48,7 @@ python tests/make_test_audio.py         # writes tests/out/mic.wav
 python tests/mic_detection_test.py      # fake microphone detection test
 python tests/sheet_reader_test.py       # offline reader, PDF import, AI reader with a stand-in API
 python tests/kits_test.py               # kit customisation
+python tests/articulations_test.py      # open hi-hat, accents, ghost notes, rimshots…
 ```
 
 Each script prints its results and exits with an error if a check fails. Screenshots are saved in `tests/out/`.
@@ -104,6 +106,15 @@ Work through this on your own hardware, then tick each item (edit this file on G
 - [ ] AI reader: a page with repeat signs is written out in full
 - [ ] With **Remember** unticked, the key is gone after closing the browser
 - [ ] Removing the key switches back to the offline reader
+
+### Articulations (Nitro Mesh)
+- [ ] Pad mapping: hitting the hi-hat with the pedal up lights *Hi-hat: open* (note 46); with it down, *Hi-hat* (42)
+- [ ] Snare rim lights *Snare: rimshot* (40); does the Nitro Mesh send a cross-stick note? (note: ____)
+- [ ] Lesson 12 (open hi-hat): playing it closed is flagged; playing it open is accepted
+- [ ] Lessons 11 and 13: find accent / ghost levels that feel fair (accent ≥ ___, ghost ≤ ___)
+- [ ] Lesson 15: rimshots are recognised
+- [ ] Record from kit keeps open hi-hats, rimshots, accents and ghost notes
+- [ ] Microphone (acoustic): teach open hi-hat; is open vs closed told apart? (__ / 10)
 
 ### Kits
 - [ ] Create a kit that matches your real kit (pieces, names, positions)

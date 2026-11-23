@@ -89,10 +89,13 @@ BAR 2
 NOTES: <one short sentence about anything unsure or simplified, or blank>
 
 Rules:
-- Each drum line is a code, a space, then one character per 16th note: 16 characters for a 4/4 bar, 12 for 3/4. "x" = hit, "." = no hit. Only list drums that are played in that bar.
+- Each drum line is a code, a space, then one character per 16th note: 16 characters for a 4/4 bar, 12 for 3/4. "." = no hit. Only list drums that are played in that bar.
+- Write HOW each note is played; this matters, so be precise:
+  x = normal hit · X = accent (">" or "^") · g = ghost note (in parentheses) · o = OPEN hi-hat ("o" above the note or a circled hi-hat) · r = rimshot · c = cross-stick / side stick · f = flam (small grace note before) · b = ride BELL (diamond notehead or "bell") · k = choke (cymbal grabbed/stopped).
+  A closed hi-hat (or "+" above it) is a plain x. Never write an open hi-hat as x.
 - Codes: CR crash, CR2 second crash, SP splash, CH china, RD ride, HH hi-hat, HP hi-hat pedal (foot), SD snare, T1 high tom, T2 mid tom, T3 third tom, FT floor tom, FT2 second floor tom, BD bass drum/kick, BD2 second kick (double pedal).
 - Follow the page's drum key/legend if it has one. Otherwise standard drum-kit notation on a 5-line staff: kick = bottom space; snare = third space; floor tom = second space; T2 = middle line; T1 = fourth space; ride = x on the top line; hi-hat = x just above the staff; crash = x on the ledger line above or a circled x; hi-hat pedal = x below the staff.
-- Write out repeat signs and "repeat bar" marks in full. Open hi-hat counts as HH. Ghost notes, rimshots and cross-stick count as SD. Round triplets and swing to the nearest 16th.
+- Write out repeat signs and "repeat bar" marks in full. Round triplets and swing to the nearest 16th and mention it in NOTES.
 - If the image is not drum notation, answer only: UNREADABLE: <reason>
 - Do not explain, do not use code blocks, keep it short.`;
 
@@ -110,7 +113,7 @@ function srParseTab(text, beats){
     if ((m = line.match(/^TIME\s*:\s*(\d)\s*\/\s*(\d)/i))) { out.beats = +m[1] === 3 ? 3 : 4; continue; }
     if ((m = line.match(/^NOTES\s*:\s*(.*)$/i))) { out.notes = m[1].trim(); continue; }
     if (/^BAR\b/i.test(line)) { cur = []; out.bars.push(cur); continue; }
-    if ((m = line.match(/^(CR2|CR|SP|CH|RD|HH|HP|SD|T1|T2|T3|FT2|FT|BD2|BD)\b\s*[:|]?\s*([xXoO.\-|_ ]+)$/))) {
+    if ((m = line.match(/^(CR2|CR|SP|CH|RD|HH|HP|SD|T1|T2|T3|FT2|FT|BD2|BD)\b\s*[:|]?\s*([xXoOgGrRcCfFbBkK.\-|_ ]+)$/))) {
       if (!cur) { cur = []; out.bars.push(cur); }
       const cells = m[2].replace(/[|\s]/g, "").replace(/[-_]/g, ".");
       cur.push({ d: TAB_CODES[m[1]], cells });
@@ -123,9 +126,10 @@ function srTabNotes(parsed, startBar){
   parsed.bars.forEach((bar, bi) => bar.forEach(({ d, cells }) => {
     // 16 cells = 16ths; 8 = 8ths; 4 = quarters (in 4/4). Anything else is stretched to fit the bar.
     const n = cells.length; if (!n) return;
-    for (let i = 0; i < n; i++) if (/[xXoO]/.test(cells[i])) {
+    for (let i = 0; i < n; i++) { const ch = cells[i]; if (ch === ".") continue;
       const st = (startBar + bi) * spb + Math.min(spb - 1, Math.floor(i * spb / n + 1e-9));
-      if (!notes.some(x => x.s === st && x.d === d)) notes.push({ s: st, d });
+      const a = ch === "x" ? null : TAB_TO_ARTIC[ch] || TAB_TO_ARTIC[ch.toLowerCase()] || null;
+      if (!notes.some(x => x.s === st && x.d === d)) notes.push(a && articFitsType(a, d) ? { s: st, d, a } : { s: st, d });
     }
   }));
   return notes;
@@ -594,7 +598,7 @@ function srMethodHint(){
   const name = P.label.replace(/ \(.*\)$/, "");
   $("#srHint").innerHTML = m === "ai"
     ? (k ? `Uses <b>your</b> ${esc(name)} key, model ${esc(srModel(prov))}. ${prov === "gemini" || prov === "groq" || /:free$|openrouter\/free/.test(srModel(prov)) ? "Free within the provider's limits." : "May be charged to your account."}` : `<span style="color:var(--amber)">No ${esc(name)} key set.</span> Add one under Library → Sheet reading, or use the offline reader.`)
-    : "Runs on this device, free. Best on clean printed sheets with simple rhythms; photos should be straight and evenly lit.";
+    : "Runs on this device, free. Best on clean printed sheets with simple rhythms; photos should be straight and evenly lit. It reads which drum and when, but not accents, ghost notes or open hi-hats: add those in the editor, or use the AI reader.";
   }
 function srClose(){ $("#srDialog").hidden = true; SRD = null; }
 async function srGo(){
@@ -625,10 +629,21 @@ function srRenderSettings(){
   $("#aiKey").placeholder = P.keyHint; $("#aiKey").value = "";
   $("#aiKeyState").textContent = k ? (settings.ai.remember ? "Key saved on this device: ••••" + k.slice(-4) : "Key set for this session only: ••••" + k.slice(-4)) : (prov === "custom" ? "No key set (some local servers don't need one)." : "No key set for this provider.");
   $("#aiBaseRow").hidden = prov !== "custom"; $("#aiBase").value = settings.ai.baseUrl || "";
-  $("#aiModel").value = srModel(prov);
-  $("#aiModelList").innerHTML = P.models.map(([id, n]) => `<option value="${esc(id)}">${esc(n)}</option>`).join("");
+  srRenderModels();
   $("#aiProvNote").textContent = P.note;
   const link = $("#aiKeyLink"); link.hidden = !P.keyUrl; if (P.keyUrl) { link.href = P.keyUrl; link.textContent = "Get a " + P.label.replace(/ \(.*\)$/, "") + " key"; }
+}
+// Model drop-down: suggested models + the ones "Load models" found (remembered per provider) + "type a name".
+function srRenderModels(){
+  const prov = aiProv(), P = AI_PROVIDERS[prov], cur = srModel(prov), named = Object.fromEntries(P.models);
+  const loaded = (settings.ai.loaded && settings.ai.loaded[prov]) || [];
+  const ids = [...new Set([...P.models.map(m => m[0]), ...loaded])];
+  if (cur && !ids.includes(cur)) ids.unshift(cur);
+  const sel = $("#aiModelSel");
+  sel.innerHTML = ids.map(id => `<option value="${esc(id)}"${id === cur ? " selected" : ""}>${esc(named[id] ? `${named[id]} (${id})` : id)}</option>`).join("") + `<option value="__type">Type a model name…</option>`;
+  if (!cur) sel.value = "__type";
+  $("#aiModel").hidden = sel.value !== "__type"; $("#aiModel").value = cur || "";
+  $("#aiModelCount").textContent = loaded.length ? `${loaded.length} models loaded from your account.` : "Press “Load models” to see every model your key can use.";
 }
 function srSetKey(prov, v){ if (settings.ai.remember) { settings.ai.keys[prov] = v; SR.sessionKeys[prov] = ""; } else { SR.sessionKeys[prov] = v; settings.ai.keys[prov] = ""; } }
 function srWire(){
@@ -646,7 +661,11 @@ function srWire(){
     const keep = {}; for (const p in AI_PROVIDERS) keep[p] = srKey(p);
     settings.ai.remember = e.target.checked; for (const p in keep) srSetKey(p, keep[p]); saveSettings(); srRenderSettings();
   };
-  $("#aiModel").onchange = e => { settings.ai.models[aiProv()] = e.target.value.trim(); saveSettings(); };
+  $("#aiModelSel").onchange = e => {
+    if (e.target.value === "__type") { $("#aiModel").hidden = false; $("#aiModel").focus(); return; }
+    settings.ai.models[aiProv()] = e.target.value; saveSettings(); srRenderModels();
+  };
+  $("#aiModel").onchange = e => { settings.ai.models[aiProv()] = e.target.value.trim(); saveSettings(); srRenderModels(); };
   $("#aiBase").onchange = e => { settings.ai.baseUrl = e.target.value.trim(); saveSettings(); };
   $("#aiMethod").onchange = e => { settings.ai.method = e.target.value; saveSettings(); };
   const listBtn = async (btn, label, ok) => {
@@ -658,10 +677,15 @@ function srWire(){
   };
   $("#aiTest").onclick = () => listBtn($("#aiTest"), "Test key", ids => toast(`The key works (${ids.length} models available)`));
   $("#aiLoad").onclick = () => listBtn($("#aiLoad"), "Load models", ids => {
-    const P = AI_PROVIDERS[aiProv()], named = Object.fromEntries(P.models);
-    $("#aiModelList").innerHTML = ids.map(id => `<option value="${esc(id)}">${esc(named[id] || id)}</option>`).join("");
-    toast(`${ids.length} models loaded: click the Model box to pick one`);
+    settings.ai.loaded = settings.ai.loaded || {}; settings.ai.loaded[aiProv()] = ids; saveSettings(); srRenderModels();
+    toast(`${ids.length} models loaded: pick one from the Model list`);
   });
   $("#srMethod").onchange = srMethodHint; $("#srGo").onclick = srGo; $("#srCancel").onclick = srClose;
   srRenderSettings();
+}
+
+// articFits() needs the piece in the active kit; the reader works on base ids, so check by type name
+function articFitsType(a, id){
+  const A = ARTICS[a]; if (!A) return false; if (!A.types) return id !== "hhp" && (id !== "kick" && id !== "kick2" || a === "accent");
+  const type = Object.keys(BASE_IDS).find(t => BASE_IDS[t].includes(id)); return A.types.includes(type);
 }

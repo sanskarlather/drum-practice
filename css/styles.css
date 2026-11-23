@@ -185,3 +185,10 @@ kbd{font-family:var(--mono);font-size:12px;background:var(--btn);border:1px soli
 .piece-row input[type=range]{flex:1 1 80px}
 .piece.editable .body{filter:none}
 .piece.editable:active{cursor:grabbing}
+
+/* articulations */
+.maprow.sub{padding-left:18px;border-top-style:dashed}
+.maprow.sub .n{font-weight:500;color:var(--muted)}
+#edArt button{min-height:40px;padding:0 10px}
+#grid .c.on::after{display:flex;align-items:center;justify-content:center;font:800 11px/1 Inter,sans-serif;color:#0E0F12;content:attr(data-art)}
+#grid .c.on[data-a="ghost"]::after{opacity:.45}

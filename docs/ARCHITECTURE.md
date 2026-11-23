@@ -11,6 +11,7 @@ How the app works, for anyone (including future me) changing the code.
 - [Inputs](#inputs)
 - [Microphone mode](#microphone-mode)
 - [Sound](#sound)
+- [Articulations](#articulations)
 - [Kits](#kits)
 - [Sheet reader](#sheet-reader)
 - [Importers](#importers)
@@ -60,13 +61,14 @@ Order matters only for code that runs at load time (later files may call functio
   bpm: 80,
   bars: 2,
   beats: 4,                 // beats per bar: 4 (4/4) or 3 (3/4)
-  notes: [ { s: 0, d: "kick" }, { s: 0, d: "hihat" }, { s: 4, d: "snare" } ],
+  notes: [ { s: 0, d: "kick" }, { s: 0, d: "hihat", a: "open" }, { s: 4, d: "snare", a: "accent" } ],
   source: "MIDI file",      // optional, shown in the library
   builtin: false
 }
 ```
 
 - `s` is the position in **16th-note steps** from the start (a 4/4 bar has 16 steps).
+- `a` (optional) is the articulation: `accent`, `ghost`, `open`, `rim`, `xstick`, `bell`, `flam` or `choke` (see `artic.js`). Absent = a normal hit.
 - `d` is a piece id: `crash`, `ride`, `hihat`, `tom1`, `tom2`, `snare`, `floor`, `kick`, `hhp` (hi-hat pedal), plus extra pieces such as `tom3`, `floor2`, `crash2`, `splash`, `china`, `ride2`, `kick2`. Ids not in the active kit are mapped with `resolveDrum()`.
 
 ### Kit (saved as `drumapp.kits`)
@@ -156,6 +158,18 @@ To compare against **several drums at once** (e.g. kick + hi-hat), the taught ba
 ## Sound
 
 `audio.js` synthesises every sound, so there are no audio files: kick (sine pitch drop), snare (filtered noise plus tone), hi-hats and cymbals (filtered noise), toms (pitched sines), metronome (short square wave). Everything goes through one master gain (the Volume slider).
+
+## Articulations
+
+`artic.js` defines each articulation: its label, the short text shown on the kit, its notation sign, its drum-tab character (`X` accent, `g` ghost, `o` open, `r` rimshot, `c` cross-stick, `b` bell, `f` flam, `k` choke), which piece types it fits, and whether e-kits send a separate MIDI note for it (`variant`).
+
+- **Data:** notes carry `a`. `compile()` keeps it on each note and in `event.art[pieceId]`. `resolveNotes()` and `resolveDrum()` keep it if it still fits the piece.
+- **Input:** `noteToDrum()` returns `{d, a}`. Variant notes live in the kit's map under keys like `hihat:open`, `snare:rim`, `snare:xstick` and `ride:bell`, defaulting to the Nitro Mesh / General MIDI notes 46, 40, 37 and 53 (moved off the main piece when an older kit is loaded). Keyboard: Shift + key = the piece's first variant.
+- **Judging:** `articProblem(note, {a, vel, src})` compares how it was played with what's written. Variant mismatch (open vs closed, rim vs head, bell vs bow) applies to MIDI input and to microphone input when both versions were taught. Velocity applies to accents (≥ `settings.vel.accent`/127) and ghost notes (≤ `settings.vel.ghost`/127). A problem makes the note `j = "art"`: not good, streak reset, tip shown. In wait mode the engine keeps waiting. `settings.artic` turns checking off.
+- **Microphone:** variants can be taught as separate fingerprints (`cal["hihat:open"]`). `micArticProblem()` decides which version an onset is closer to, and estimates loudness as amplitude relative to the taught hits (a hit as loud as the taught ones ≈ velocity 76).
+- **Display:** the kit's centre text shows `ARTICS[a].short`; the instruction and *Coming up* chips name it. The notation draws `>`, `o`, `( )`, diamonds, slashed heads, circled x, grace notes and `+`.
+- **Sound:** `playDrum(id, t, vel, a)` has separate synthesis for open hi-hat, rimshot, cross-stick, bell, choke and flam, and scales ghost/accent velocity.
+- **Import:** MIDI uses notes 46/26 (open), 37 (cross-stick), 53 (bell), and velocity relative to each drum's median for accents and ghost notes. MusicXML uses instrument names ("Open Hi-Hat", "Side Stick", "Ride Bell"), `<accent>`, parenthesised noteheads, `<open>`, and grace notes (= flam). The AI reader's prompt asks for these characters explicitly. The offline reader doesn't detect articulations.
 
 ## Kits
 

@@ -75,17 +75,19 @@ function micCalFeat(ids){
   return micFeat(att, dec);
 }
 const micDist = (a,b) => Math.sqrt(a.reduce((s,x,i)=>s+(x-b[i])**2, 0));
-function micTaught(){ return Object.keys(settings.mic.cal).filter(id=>D[id]); }
+// taught keys: piece ids, plus variants like "hihat:open" taught separately
+function micTaught(){ return Object.keys(settings.mic.cal).filter(k => D[k.split(":")[0]]); }
+const micBase = k => k.split(":")[0];
 function micClassify(o){
   const v = micFeat(o.att, o.dec); let best = null;
-  for (const id of micTaught()) { const d = micDist(v, micCalFeat([id])); if (!best || d < best.dist) best = {d:id, dist:d}; }
+  for (const k of micTaught()) { const d = micDist(v, micCalFeat([k])); if (!best || d < best.dist) best = {key:k, d:micBase(k), a:k.split(":")[1] || null, dist:d}; }
   return best;
 }
 // Does this onset sound like the drums the song expects at this moment?
 function micDrumCheck(o, drums){
   const mode = settings.mic.check;
   const taught = micTaught();
-  const exp = drums.filter(d=>taught.includes(d));
+  const exp = drums.filter(d=>taught.includes(d)), expAll = taught.filter(k => drums.includes(micBase(k)));
   const best = micClassify(o);
   if (mode === "timing" || !exp.length) return {ok:true, heard:best};
   const v = micFeat(o.att, o.dec);
@@ -94,9 +96,10 @@ function micDrumCheck(o, drums){
   const lenient = mode === "lenient";
   const groups = new Set(exp.map(d=>micGroup(d)).filter(Boolean));
   let dAlt = Infinity;
+  for (const k of expAll) if (k.includes(":")) dExp = Math.min(dExp, micDist(v, micCalFeat([k]))); // e.g. the open hi-hat is still the hi-hat
   for (const id of taught) {
-    if (exp.includes(id)) continue;
-    if (lenient && micGroup(id) && groups.has(micGroup(id))) continue;
+    if (drums.includes(micBase(id))) continue;
+    if (lenient && micGroup(micBase(id)) && groups.has(micGroup(micBase(id)))) continue;
     dAlt = Math.min(dAlt, micDist(v, micCalFeat([id])));
   }
   return {ok: dExp <= dAlt * (lenient ? 1.25 : 1.0), heard:best};
@@ -160,7 +163,7 @@ function micMessage(m){
   const offSteps = (settings.mic.offset/1000)/E.stepSec();
   const pos = E.blocked ? E.posBase : E.posBase + (m.t - E.clockBase)/E.stepSec() - offSteps;
   if (E.mode === "practice") judgeOnset(m, pos);
-  else if (E.mode === "record" && guess) recordHit(guess.d, pos);
+  else if (E.mode === "record" && guess) recordHit(guess.d, pos, { a: guess.a, src: "mic" });
 }
 
 /* --- teaching --- */
@@ -174,7 +177,7 @@ function micTeachHit(m){
     const hits = MIC.teachHits, p = [0,0,0,0,0]; let tot = 0, dr = 0;
     for (const h of hits) { const t = h.att.reduce((a,b)=>a+b,0)+1e-12; h.att.forEach((a,k)=>p[k]+=a/t/hits.length); tot += t/hits.length; dr += h.dec/t/hits.length; }
     settings.mic.cal[MIC.teach] = {p, tot, dr, n:hits.length};
-    toast(`Learned your ${D[MIC.teach].name}`);
+    const [pid, va] = MIC.teach.split(":"); toast(`Learned your ${D[pid].name}${va ? " (" + articLabel(va).toLowerCase() + ")" : ""}`);
     MIC.teach = null; saveSettings();
   }
   micRenderUI();
@@ -214,6 +217,14 @@ function judgeOnset(o, pos){
     if (!E.blocked) { open.forEach(n=>n.j="wrong"); st.judged += open.length; st.streak = 0; renderStats(); }
     return;
   }
+  // how it was played: special strokes (if taught) and loudness for accents / ghost notes
+  const prob = micArticProblem(o, ev, open);
+  if (prob) {
+    floatText(anchor, prob.short, "#FFB547"); setFb(E.blocked ? "Not quite" : "Right time, wrong touch", "#FFB547", "#0E0F12", prob.tip);
+    if (!E.blocked) { open.forEach(n=>n.j="art"); st.judged += open.length; st.streak = 0; st.artWrong = (st.artWrong||0) + 1; renderStats(); }
+    return;
+  }
+  if (open.some(n=>n.a)) st.artRight = (st.artRight||0) + 1;
   if (E.blocked) {
     open.forEach(n=>n.j="ok"); st.judged += open.length; st.good += open.length; st.streak += open.length; st.best = Math.max(st.best, st.streak);
     floatText(anchor, "Got it!", "#7BD389"); setFb("Got it!", "#7BD389", "#0E0F12", "Heard " + heardName); renderStats(); return;
@@ -229,6 +240,30 @@ function judgeOnset(o, pos){
   renderStats();
 }
 
+// For each note of the event: was the special stroke right (only if both versions were taught), and the loudness?
+function micArticProblem(o, ev, open){
+  if (!settings.artic) return null;
+  const taught = micTaught(), v = micFeat(o.att, o.dec);
+  const keyOf = (n, a) => a && taught.includes(variantKey(n.d, a)) ? variantKey(n.d, a) : n.d;
+  for (const n of open) {
+    for (const va of variantsFor(n.d)) {
+      if (!taught.includes(variantKey(n.d, va)) || !taught.includes(n.d)) continue;
+      const withV = open.map(m => m === n ? variantKey(n.d, va) : keyOf(m, m.a)).filter(k => taught.includes(k));
+      const without = open.map(m => m === n ? n.d : keyOf(m, m.a)).filter(k => taught.includes(k));
+      const got = micDist(v, micCalFeat(withV)) < micDist(v, micCalFeat(without)) * 0.92 ? va : null;
+      const p = articProblem(n, { a: got, src: "mic-variant" }); if (p) return p;
+    }
+  }
+  // loudness: amplitude compared with the taught hits of the same drums
+  const keys = open.map(n => keyOf(n, n.a)).filter(k => settings.mic.cal[k]);
+  if (keys.length) {
+    const ref = keys.reduce((s, k) => s + settings.mic.cal[k].tot, 0), e = o.att.reduce((a, b) => a + b, 0);
+    const vel = 0.6 * Math.sqrt(e / ref); // a hit as loud as the taught ones = about velocity 76
+    for (const n of open) { if (n.a !== "accent" && n.a !== "ghost") continue; const p = articProblem(n, { vel, src: "mic" }); if (p) return p; }
+  }
+  return null;
+}
+
 /* --- setup UI --- */
 function micRenderUI(){
   const btn = $("#micBtn"); if (!btn) return;
@@ -239,15 +274,17 @@ function micRenderUI(){
   $("#micOffset").value = settings.mic.offset; $("#micOffOut").textContent = settings.mic.offset + " ms";
   $("#micCheck").value = settings.mic.check;
   const box = $("#micCalRows"); box.innerHTML = "";
-  for (const d of DRUMS) {
-    const c = settings.mic.cal[d.id];
-    const r = h("div", {class:"maprow"});
-    const status = MIC.teach === d.id ? `Hit it ${MIC_TEACH_HITS - MIC.teachHits.length} more time${MIC_TEACH_HITS - MIC.teachHits.length === 1 ? "" : "s"}…` : c ? "Learned" : "Not taught";
-    r.innerHTML = `<span class="n"><i style="background:${d.color}"></i>${esc(d.name)}</span><span class="notes" style="${MIC.teach===d.id?"color:var(--amber)":c?"color:var(--green)":""}">${status}</span>`;
-    const b = h("button", {class:"btn", type:"button"}, MIC.teach === d.id ? "Cancel" : c ? "Teach again" : "Teach");
-    b.onclick = () => { if (MIC.teach === d.id) { MIC.teach = null; micRenderUI(); } else micTeachStart(d.id); };
+  const rows = [];
+  for (const d of DRUMS) { rows.push({ key: d.id, name: d.name, color: d.color }); for (const va of variantsFor(d.id)) rows.push({ key: variantKey(d.id, va), name: `${d.name}: ${articLabel(va).replace(/^Ride bell$/,"bell").replace(/^Open hi-hat$/,"open").toLowerCase()} (optional)`, color: d.color, sub: true }); }
+  for (const row of rows) {
+    const c = settings.mic.cal[row.key];
+    const r = h("div", {class:"maprow" + (row.sub ? " sub" : "")});
+    const status = MIC.teach === row.key ? `Hit it ${MIC_TEACH_HITS - MIC.teachHits.length} more time${MIC_TEACH_HITS - MIC.teachHits.length === 1 ? "" : "s"}…` : c ? "Learned" : "Not taught";
+    r.innerHTML = `<span class="n"><i style="background:${row.color}${row.sub?";opacity:.5":""}"></i>${esc(row.name)}</span><span class="notes" style="${MIC.teach===row.key?"color:var(--amber)":c?"color:var(--green)":""}">${status}</span>`;
+    const b = h("button", {class:"btn", type:"button"}, MIC.teach === row.key ? "Cancel" : c ? "Teach again" : "Teach");
+    b.onclick = () => { if (MIC.teach === row.key) { MIC.teach = null; micRenderUI(); } else micTeachStart(row.key); };
     r.appendChild(b);
-    if (c) { const x = h("button", {class:"btn danger", type:"button", "aria-label":"Forget "+d.name}, "Forget"); x.onclick = () => { delete settings.mic.cal[d.id]; saveSettings(); micRenderUI(); }; r.appendChild(x); }
+    if (c) { const x = h("button", {class:"btn danger", type:"button", "aria-label":"Forget "+row.name}, "Forget"); x.onclick = () => { delete settings.mic.cal[row.key]; saveSettings(); micRenderUI(); }; r.appendChild(x); }
     box.appendChild(r);
   }
 }

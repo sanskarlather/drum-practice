@@ -6,6 +6,7 @@ This guide walks through every screen, assuming you've never played drums before
 - [Practice screen](#practice-screen)
 - [Library](#library)
 - [Note editor](#note-editor)
+- [Articulations](#articulations)
 - [Reading sheet music](#reading-sheet-music)
 - [Kit setup](#kit-setup)
 - [Tips for beginners](#tips-for-beginners)
@@ -97,13 +98,36 @@ Imported songs always open in the editor first, so you can check them.
 ![Note editor](screenshots/editor.png)
 
 - Each **row** is a drum; each **column** is a 16th note. The numbers on top are beats (1, 2, 3, 4), with **&** halfway between.
-- **Click** a square to add or remove a note; **drag** to paint several.
+- Choose **how** the note is played above the grid: Normal, Accent, Ghost note, Open hi-hat, Rimshot, Cross-stick, Ride bell, Flam or Choke. Then **click** a square to add it. Clicking a note again with the same choice removes it; with a different choice it changes it. **Drag** to paint several. Choices that don't fit a drum (an open snare) add a normal hit instead.
 - **Title, Tempo, Bars, Beats per bar:** set these first. Reducing bars removes notes past the end.
 - **Read notes from a sheet:** reads a PDF or photo and loads the notes (see below). The sheet stays visible above the grid; **Read again** retries with the other reader.
-- **Record from kit:** a 1-bar count-in, then everything you play is snapped onto the grid for the length of the song. Recording adds to what's already there; use **Clear** to start over.
+- **Record from kit:** a 1-bar count-in, then everything you play is snapped onto the grid for the length of the song, including open hi-hats and rimshots (from the pad) and accents and ghost notes (from how hard you hit). Recording adds to what's already there; use **Clear** to start over.
 - **Listen:** plays the pattern with the app's drum sounds.
 - **Save:** stores it in My songs. **Practise this** saves and opens it on the practice screen.
 - Editing a built-in lesson saves a copy, so the lesson itself stays as it was.
+
+## Articulations
+
+An articulation is *how* a note is played. The app treats them as part of the music, never as an afterthought:
+
+| What you'll see on the drum | Means | How to play it |
+|---|---|---|
+| **OPEN** (hi-hat) | Open hi-hat | Lift your left foot a little so the cymbals ring, then close it on the next note |
+| **ACCENT** | Accent | Hit harder than the notes around it (raise the stick higher) |
+| **GHOST** | Ghost note | Barely touch the drum: very soft, from a low stick height |
+| **RIM** | Rimshot | Hit the head and the rim at the same time: a loud crack |
+| **X-STICK** | Cross-stick | Lay the stick across the snare and click it against the rim |
+| **BELL** (ride) | Ride bell | Hit the raised bell in the middle of the ride |
+| **FLAM** | Flam | A soft grace note with the other hand just before the main hit |
+| **CHOKE** | Choke | Grab the cymbal right after hitting it to stop the sound |
+
+- The instruction line also says it, e.g. *Hit the Hi-hat (open)*, and **Coming up** shows it on each chip.
+- The notation strip uses the usual symbols: `>` accent, `( )` ghost note, `o` open hi-hat, diamond = bell, slashed head = rimshot, circled x on the snare = cross-stick, small grace note = flam, `+` = choke.
+- If you hit on time but the wrong way, you'll see **"Right time, wrong touch"** and a tip. With **Wait for me** on, the song waits until you get it right.
+- Untick **Check how I play each note** (Sounds panel) to practise just the timing at first.
+- **E-kit:** the Nitro Mesh sends different notes for open and closed hi-hat and for snare head and rim, so those are checked exactly. Accents and ghost notes are checked by how hard you hit; set the levels in **Kit setup → Accents and ghost notes** (*Last note received* shows each hit's velocity).
+- **Keyboard:** hold **Shift** for the special stroke (Shift+A open hi-hat, Shift+S rimshot, Shift+H ride bell).
+- Lessons 11 to 15 teach them one at a time.
 
 ## Reading sheet music
 
@@ -132,6 +156,7 @@ Keys are stored only in this browser and sent only to the provider you chose. Th
 - Use a PDF, or a photo taken straight on from above, in good even light, with the whole page in frame.
 - Printed music works; handwriting doesn't.
 - Simple grooves and fills read well. Triplets, repeat signs, "repeat bar" marks, multi-bar rests and very dense 32nd-note passages don't. Use the AI reader for those.
+- The offline reader finds which drum and when, but **not** accents, ghost notes or open hi-hats. Add those in the editor with the articulation buttons, or use the AI reader, which transcribes them.
 
 ## Kit setup
 

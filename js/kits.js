@@ -62,6 +62,14 @@ function applyKit(kit){
     DRUMS.push(d); D[d.id] = d;
     if (!kit.map[d.id]) kit.map[d.id] = [];
   }
+  // pad mapping for special strokes (open hi-hat, rimshot, cross-stick, ride bell); older kits had these notes on the main piece
+  for (const d of DRUMS) for (const a of variantsFor(d.id)) {
+    const vk = variantKey(d.id, a);
+    if (kit.map[vk]) continue;
+    const notes = (DEFAULT_VARIANT_MAP[vk] || []).slice();
+    for (const k in kit.map) kit.map[k] = kit.map[k].filter(n => !notes.includes(n));
+    kit.map[vk] = notes;
+  }
   settings.map = kit.map; settings.mic.cal = kit.cal; settings.kit = kit.id;
 }
 // Play a song's piece on this kit: the piece itself, or the closest one the kit has.
@@ -83,7 +91,7 @@ function kitChanged(){
   renderKitEditor();
   const kl = $("#keyList"); if (kl) kl.innerHTML = keyListHtml();
 }
-function resolveNotes(notes){ const out = [], seen = new Set(); for (const n of notes) { const d = resolveDrum(n.d); if (!d || seen.has(n.s+"|"+d)) continue; seen.add(n.s+"|"+d); out.push({ s:n.s, d }); } return out; }
+function resolveNotes(notes){ const out = [], seen = new Set(); for (const n of notes) { const d = resolveDrum(n.d); if (!d || seen.has(n.s+"|"+d)) continue; seen.add(n.s+"|"+d); out.push(n.a && articFits(n.a, d) ? { s:n.s, d, a:n.a } : { s:n.s, d }); } return out; }
 function keyListHtml(){ return DRUMS.filter(d=>d.key).map(d=>`<span><kbd>${d.key===" "?"Space":d.key.toUpperCase()}</kbd> ${esc(d.name)}</span>`).join("") + `<span><kbd>Enter</kbd> Play / pause</span>`; }
 function addPiece(type){
   const kit = activeKit(), T = PIECE_TYPES[type], id = newPieceId(kit, type);
@@ -109,6 +117,8 @@ function addPiece(type){
 }
 function removePiece(id){
   const kit = activeKit(); if (kit.pieces.length <= 1) { toast("A kit needs at least one piece"); return; }
+  for (const k of Object.keys(kit.map)) if (k.startsWith(id + ":")) delete kit.map[k];
+  for (const k of Object.keys(kit.cal)) if (k.startsWith(id + ":")) delete kit.cal[k];
   const p = kit.pieces.find(x=>x.id===id);
   kit.pieces = kit.pieces.filter(x=>x.id!==id); delete kit.map[id]; delete kit.cal[id];
   kitChanged(); toast(`Removed ${p ? p.name : id}`);
