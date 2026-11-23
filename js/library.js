@@ -1,0 +1,40 @@
+"use strict";
+/* ---------- Library ---------- */
+function songRow(s, list){
+  const r = h("div",{class:"song"});
+  const total = s.notes.length; const best = bests[s.id];
+  r.innerHTML = `<div class="t"><b>${esc(s.title)}</b><span>${esc(s.desc || s.source || "")} · ${s.bpm} BPM · ${s.bars} bar${s.bars>1?"s":""}</span></div><span class="best">${best!=null?"Best "+best+"%":total+" notes"}</span>`;
+  const acts = h("div",{class:"acts"});
+  const p = h("button",{class:"btn primary",type:"button"},"Practise"); p.onclick=()=>{ loadSong(s); show("practice"); };
+  const e = h("button",{class:"btn",type:"button"},"Edit"); e.onclick=()=>openEditor(s);
+  acts.append(p,e);
+  if (!s.builtin) { const del = h("button",{class:"btn danger",type:"button","aria-label":"Delete "+s.title},"Delete"); del.onclick=()=>{ if (confirmDelete(s)) { songs = songs.filter(x=>x.id!==s.id); store.set("songs",songs); renderLibrary(); toast("Deleted"); } }; acts.append(del); }
+  r.appendChild(acts); list.appendChild(r);
+}
+let pendingDelete = null;
+function confirmDelete(s){ if (pendingDelete===s.id) { pendingDelete=null; return true; } pendingDelete=s.id; toast(`Press Delete again to remove "${s.title}"`); setTimeout(()=>{ if(pendingDelete===s.id) pendingDelete=null; },3500); return false; }
+function renderLibrary(){
+  const ll = $("#lessonList"); ll.innerHTML=""; LESSONS.forEach(s=>songRow(s,ll));
+  const sl = $("#songList"); sl.innerHTML="";
+  if (!songs.length) sl.innerHTML = '<p class="muted" style="margin:0;font-size:14px">Nothing here yet. Import a file or write a pattern in the note editor.</p>';
+  songs.forEach(s=>songRow(s,sl));
+}
+function saveSong(s){ s.builtin=false; const i = songs.findIndex(x=>x.id===s.id); if (i>=0) songs[i]=s; else songs.push(s); store.set("songs",songs); renderLibrary(); }
+
+/* -------- imports -------- */
+async function importFile(file){
+  const name = file.name.replace(/\.[^.]+$/,""), ext = (file.name.split(".").pop()||"").toLowerCase();
+  try {
+    if (ext==="mid" || ext==="midi") { const s = parseMidi(new Uint8Array(await file.arrayBuffer()), name); finishImport(s, "MIDI file"); }
+    else if (ext==="xml" || ext==="musicxml") { const s = parseMusicXML(await file.text(), name); finishImport(s, "MusicXML"); }
+    else if (ext==="mxl") toast("Compressed .mxl isn't supported yet. Export as uncompressed MusicXML (.musicxml).");
+    else if (ext==="pdf" || file.type.startsWith("image/")) {
+      const s = {id:uid(), title:name, bpm:80, bars:4, beats:4, notes:[], source:"Copied from sheet"};
+      openEditor(s); showTrace(file); toast("Copy the notes from your sheet onto the grid, then Save");
+    } else toast("That file type isn't supported");
+  } catch(err) { console.error(err); toast("Couldn't read that file: "+err.message); }
+}
+function finishImport(s, src){
+  if (!s.notes.length) throw new Error("no drum notes found");
+  s.source = src; saveSong(s); openEditor(s); toast(`Imported ${s.notes.length} notes. Check them, then press Practise this`);
+}

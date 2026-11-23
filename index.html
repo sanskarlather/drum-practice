@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0E0F12">
+<meta name="description" content="Drum practice app: a lit-up kit shows what to hit. Works with an e-kit over USB MIDI or a microphone.">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<title>Drum Practice</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@500;700&display=swap">
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+<header class="top">
+  <div style="display:flex;align-items:center;gap:20px;flex-wrap:wrap;min-width:0">
+    <div class="brand"><span class="dot" aria-hidden="true"></span>Drum Practice</div>
+    <nav class="main" aria-label="Main">
+      <button data-view="practice" aria-current="page">Practice</button>
+      <button data-view="library">Library</button>
+      <button data-view="editor">Note editor</button>
+      <button data-view="setup">Kit setup</button>
+    </nav>
+  </div>
+  <button class="pill" id="midiPill" data-view="setup" type="button"><span class="led"></span><span id="midiText">Connect your e-kit</span></button>
+</header>
+
+<main>
+<!-- PRACTICE -->
+<section id="view-practice" aria-label="Practice">
+  <div class="p-head">
+    <div style="min-width:0">
+      <div class="meta"><span id="songTitle">—</span> · <span id="barInfo">Bar 1</span></div>
+      <h1 id="instr" aria-live="polite">Press play to start</h1>
+    </div>
+    <div class="count" id="count" aria-hidden="true"></div>
+  </div>
+  <div class="p-body">
+    <div class="kitbox" id="kitbox">
+      <svg id="kit" viewBox="0 0 880 610" role="img" aria-label="Your drum kit, seen from your seat. The drum to hit lights up."></svg>
+      <div class="overlay" id="endOverlay" hidden>
+        <div class="card">
+          <h2 id="endTitle">Nice work!</h2>
+          <p class="muted" id="endText" style="margin:0"></p>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center">
+            <button class="btn primary" id="endAgain" type="button">Play again</button>
+            <button class="btn" id="endSlower" type="button">Slower</button>
+            <button class="btn" id="endNext" type="button">Next lesson</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <aside class="side">
+      <div class="card upnext">
+        <div class="eyebrow" style="margin-bottom:8px">Coming up</div>
+        <div id="upnext"></div>
+      </div>
+      <div class="card" style="display:flex;flex-direction:column;gap:12px">
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><span id="fb">Ready</span><span class="muted" style="font-size:13px" id="fbDetail">Hit a drum to test</span></div>
+        <div class="stats">
+          <div><b id="stAcc">–</b><span>On target</span></div>
+          <div><b id="stStreak">0</b><span>In a row</span></div>
+          <div><b id="stMiss">0</b><span>Missed</span></div>
+        </div>
+        <div>
+          <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-bottom:6px"><span>Early</span><span id="timingTxt">Timing</span><span>Late</span></div>
+          <div style="position:relative;height:10px;border-radius:5px;background:#23262E">
+            <div style="position:absolute;left:50%;top:-3px;width:2px;height:16px;background:#7A808C"></div>
+            <div id="timingDot" style="position:absolute;left:50%;top:-4px;width:18px;height:18px;border-radius:50%;background:var(--amber);transform:translateX(-50%);transition:left .15s"></div>
+          </div>
+        </div>
+      </div>
+      <div class="card" style="display:flex;flex-direction:column;gap:4px">
+        <div class="eyebrow" style="margin-bottom:4px">Sounds</div>
+        <label class="toggle"><input type="checkbox" id="optMetro" checked>Metronome click</label>
+        <label class="toggle"><input type="checkbox" id="optDemo">Play the pattern for me (listen)</label>
+        <label class="toggle"><input type="checkbox" id="optHitSnd">App drum sounds when I hit</label>
+        <label class="toggle" style="gap:10px">Volume <input type="range" id="optVol" min="0" max="100" value="70" style="flex:1"></label>
+              <div class="eyebrow" style="margin:10px 0 6px">No cable? Acoustic kit?</div>
+        <button class="btn" type="button" id="quickMic">Listen with microphone</button>
+      </div>
+    </aside>
+  </div>
+  <div class="sheetbox" id="sheetbox">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
+      <span class="eyebrow">Sheet music <span style="text-transform:none;letter-spacing:0;font-weight:400">· simplified, for when you're ready to read</span></span>
+    </div>
+    <div id="sheetScroll"><svg id="sheet" height="140"></svg></div>
+  </div>
+  <footer class="transport">
+    <div class="tgroup">
+      <button class="btn icon" id="restartBtn" type="button" aria-label="Back to start"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M19 20 9 12l10-8z"/><rect x="5" y="4" width="2.5" height="16"/></svg></button>
+      <button id="playBtn" type="button" aria-label="Play"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" id="playIcon"><path d="M7 4l13 8-13 8z"/></svg></button>
+      <label class="toggle"><input type="checkbox" id="optLoop" checked>Loop</label>
+      <label class="toggle"><input type="checkbox" id="optWait">Wait for me</label>
+    </div>
+    <div class="tempo">
+      <label for="tempo" class="muted" style="font-size:13px">Tempo</label>
+      <input id="tempo" type="range" min="30" max="200" value="70">
+      <output id="tempoOut" for="tempo">70 BPM</output>
+    </div>
+    <div class="seg" role="group" aria-label="View">
+      <button type="button" data-v="kit">Kit only</button>
+      <button type="button" data-v="both" aria-pressed="true">Kit + sheet</button>
+      <button type="button" data-v="sheet">Sheet only</button>
+    </div>
+  </footer>
+</section>
+
+<!-- LIBRARY -->
+<section id="view-library" hidden aria-label="Library">
+  <div class="lib-grid">
+    <div class="lib-main">
+      <div>
+        <h1 style="font-size:30px;margin-bottom:6px">Library</h1>
+        <p class="muted" style="margin:0">Start with the beginner lessons, or bring in your own music.</p>
+      </div>
+      <div class="drop" id="drop">
+        <span style="color:var(--amber)"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M17 8l-5-5-5 5"/><path d="M12 3v12"/></svg></span>
+        <span class="muted">Drop a MIDI, MusicXML, PDF or photo here, or</span>
+        <button class="btn primary" type="button" id="pickFile">Choose file</button>
+        <input type="file" id="fileIn" class="sr" accept=".mid,.midi,.xml,.musicxml,.pdf,image/*">
+      </div>
+      <div class="imports">
+        <button class="imp" type="button" data-pick=".mid,.midi"><span class="ic" style="background:#4CC9F022;color:#4CC9F0"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></span><b>MIDI file</b><span>Drum tracks (channel 10) become notes, with tempo.</span><code>.mid · .midi</code></button>
+        <button class="imp" type="button" data-pick=".xml,.musicxml"><span class="ic" style="background:#7BD38922;color:#7BD389"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg></span><b>MusicXML</b><span>Exported from MuseScore, Sibelius, Guitar Pro and others (uncompressed).</span><code>.musicxml · .xml</code></button>
+        <button class="imp" type="button" data-pick=".pdf,image/*"><span class="ic" style="background:#FFB54722;color:#FFB547"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></span><b>PDF or photo</b><span>Opens next to the note editor so you can copy the notes onto the grid.</span><code>.pdf · .jpg · .png</code></button>
+        <button class="imp" type="button" id="newSong"><span class="ic" style="background:#B57EDC22;color:#B57EDC"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg></span><b>Write it yourself</b><span>Tap notes on a grid, or record by playing your kit.</span><code>Note editor</code></button>
+      </div>
+      <div class="card">
+        <h2 style="font-size:20px;margin-bottom:4px">Beginner lessons</h2>
+        <p class="muted" style="margin:0 0 6px;font-size:14px">Go in order. Each one adds a single new thing.</p>
+        <div class="songs" id="lessonList"></div>
+      </div>
+      <div class="card">
+        <h2 style="font-size:20px;margin-bottom:6px">My songs</h2>
+        <div class="songs" id="songList"></div>
+      </div>
+    </div>
+    <aside class="lib-side">
+      <div class="card">
+        <div class="eyebrow" style="margin-bottom:8px">How practice works</div>
+        <ol style="margin:0;padding-left:18px;color:var(--soft);font-size:14px;line-height:1.6">
+          <li>Press play. You get a 4-click count-in.</li>
+          <li>The drum to hit glows. A ring closes in on it: hit when the ring touches the drum.</li>
+          <li>The tag on each drum says which hand or foot to use.</li>
+          <li>Turn on <b>Wait for me</b> to go at your own pace.</li>
+        </ol>
+      </div>
+      <div class="card">
+        <div class="eyebrow" style="margin-bottom:8px">About PDF & photo import</div>
+        <p style="margin:0;color:var(--soft);font-size:14px;line-height:1.55">Automatic reading of printed drum notation isn't in this version. Your sheet opens above the note grid so you can copy the notes across; it takes a few minutes per page and the result is exact.</p>
+      </div>
+    </aside>
+  </div>
+</section>
+
+<!-- EDITOR -->
+<section id="view-editor" hidden aria-label="Note editor">
+  <div class="ed-head">
+    <div class="ed-fields">
+      <label>Title<input type="text" id="edTitle" style="width:240px"></label>
+      <label>Tempo (BPM)<input type="number" id="edBpm" min="30" max="240" style="width:100px"></label>
+      <label>Bars<input type="number" id="edBars" min="1" max="32" style="width:80px"></label>
+      <label>Beats per bar<select id="edBeats"><option value="4">4 (4/4)</option><option value="3">3 (3/4)</option></select></label>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn" type="button" id="edTraceBtn">Show sheet to copy from</button>
+      <input type="file" id="edTraceIn" class="sr" accept=".pdf,image/*">
+    </div>
+  </div>
+  <div class="trace" id="trace" hidden>
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
+      <span class="eyebrow">Copy from this sheet</span>
+      <div style="display:flex;gap:8px"><a id="traceOpen" class="btn" target="_blank" rel="noopener">Open in new tab</a><button class="btn" type="button" id="traceClose">Hide</button></div>
+    </div>
+    <div class="view" id="traceView"></div>
+  </div>
+  <div class="ed-tools">
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+      <span class="muted" style="font-size:13px">Click a square to add or remove a note. Drag to paint.</span>
+      <button class="btn" type="button" id="edClear">Clear</button>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn rec" type="button" id="edRec"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="7" fill="currentColor"/></svg><span>Record from kit</span></button>
+      <button class="btn" type="button" id="edPlay">Listen</button>
+      <button class="btn" type="button" id="edSave">Save</button>
+      <button class="btn primary" type="button" id="edPractise">Practise this</button>
+    </div>
+  </div>
+  <div class="gridbox"><div id="grid" role="grid" aria-label="Note grid"></div></div>
+  <div class="ed-bottom">
+    <p class="muted" style="margin:0;font-size:14px;max-width:760px;line-height:1.55"><b style="color:var(--red)">Record from kit</b> gives you a 1-bar count-in, then records what you play on your e-kit for the length of the song and snaps it to the grid. Each column is a 16th note; the numbers on top are the beats.</p>
+  </div>
+</section>
+
+<!-- SETUP -->
+<section id="view-setup" hidden aria-label="Kit setup">
+  <div class="setup">
+    <div class="card">
+      <h2 style="font-size:22px;margin-bottom:6px">Connect your Alesis Nitro Mesh</h2>
+      <ol style="margin:0 0 12px;padding-left:18px;color:var(--soft);font-size:14px;line-height:1.7">
+        <li>Plug a USB cable from the <b>USB/MIDI</b> port on the back of the module into your laptop (or your Android phone with a USB-OTG adapter).</li>
+        <li>Open this page in <b>Chrome</b> or <b>Edge</b>, then press <b>Connect</b> and allow MIDI access.</li>
+        <li>Hit any pad. The matching drum below lights up.</li>
+      </ol>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <button class="btn primary" type="button" id="connectBtn">Connect</button>
+        <span id="midiDevices" class="muted" style="font-size:14px">Not connected</span>
+      </div>
+      <p style="font-size:14px;color:var(--soft);margin:14px 0 0">Last note received: <b id="lastNote" style="font-family:var(--mono)">—</b></p>
+      <p id="midiHelp" class="muted" style="font-size:13px;line-height:1.5;margin:10px 0 0"></p>
+    </div>
+    <div class="card" id="micCard">
+      <h2 style="font-size:22px;margin-bottom:6px">Microphone mode</h2>
+      <p class="muted" style="font-size:14px;line-height:1.55;margin:0 0 12px">For an acoustic kit, or when the e-kit can't connect. The app listens to your hits and checks your timing, and, once you've taught it your drums, which drum you hit. Timing is reliable; telling similar drums apart (two toms, crash vs ride) is not perfect.</p>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <button class="btn primary" type="button" id="micBtn">Turn on microphone</button>
+      </div>
+      <p id="micStatus" class="muted" style="font-size:13px;line-height:1.5;margin:10px 0"></p>
+      <div class="meter" aria-hidden="true"><div id="micLvl"></div><div id="micThr"></div></div>
+      <label style="display:flex;align-items:center;gap:10px;font-size:14px;color:var(--soft);margin-top:10px">Sensitivity <input type="range" id="micSens" min="1" max="100" style="flex:1"> <output id="micSensOut" style="font-family:var(--mono);width:28px">60</output></label>
+      <p class="muted" style="font-size:13px;margin:4px 0 0">Raise it if soft hits are missed; lower it if it hears things you didn't play. Last heard: <b id="micHeard" style="color:var(--text)">—</b></p>
+
+      <h3 style="font-size:17px;margin:18px 0 4px">1. Teach it your drums</h3>
+      <p class="muted" style="font-size:13px;line-height:1.5;margin:0 0 6px">Press <b>Teach</b>, then hit that drum 6 times at normal strength, about a second apart. Only teach the drums you have. Teach again if you move the mic or change rooms.</p>
+      <div id="micCalRows"></div>
+      <label style="display:flex;flex-direction:column;gap:6px;font-size:14px;color:var(--soft);margin-top:12px">2. How strict should drum checking be?
+        <select id="micCheck"><option value="lenient">Timing + drum, forgiving (any tom counts for a tom)</option><option value="strict">Timing + drum, strict</option><option value="timing">Timing only</option></select></label>
+
+      <h3 style="font-size:17px;margin:18px 0 4px">3. Measure the delay</h3>
+      <p class="muted" style="font-size:13px;line-height:1.5;margin:0 0 8px">Turn your speakers up and press the button: the app plays 8 clicks and times how long the mic takes to hear them.</p>
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><button class="btn" type="button" id="micMeasure">Measure delay</button><output id="micOffOut" style="font-family:var(--mono)">0 ms</output></div>
+      <input type="range" id="micOffset" min="-50" max="400" style="width:100%;margin-top:8px" aria-label="Microphone delay in milliseconds">
+      <p class="muted" style="font-size:13px;line-height:1.5;margin:12px 0 0"><b style="color:var(--text)">While practising:</b> use headphones for the metronome, otherwise the mic hears the clicks as hits. On an e-kit, mic mode only works if the module plays through a speaker near the mic.</p>
+    </div>
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px">
+        <h2 style="font-size:20px">Pad mapping</h2>
+        <button class="btn" type="button" id="mapReset">Reset to Nitro Mesh</button>
+      </div>
+      <p class="muted" style="font-size:13px;margin:0 0 8px">If a pad lights the wrong drum, press <b>Learn</b> and then hit that pad.</p>
+      <div id="mapRows"></div>
+    </div>
+    <div class="card">
+      <h2 style="font-size:20px;margin-bottom:8px">Timing</h2>
+      <label style="display:flex;flex-direction:column;gap:8px;font-size:14px;color:var(--soft)">Hit timing adjustment: <output id="offOut" style="font-family:var(--mono)">0 ms</output>
+        <input type="range" id="offset" min="-150" max="150" value="0"></label>
+      <p class="muted" style="font-size:13px;line-height:1.5">If every hit says "late" even when it sounds right, move this left until most hits read "Perfect". Bluetooth headphones add a lot of delay; wired headphones from the module are best.</p>
+      <h2 style="font-size:20px;margin:16px 0 8px">No kit plugged in?</h2>
+      <p class="muted" style="font-size:13px;line-height:1.6;margin:0 0 8px">Tap the drums on screen, or use the keyboard:</p>
+      <div style="display:flex;flex-wrap:wrap;gap:8px 14px;font-size:13px;color:var(--soft)" id="keyList"></div>
+    </div>
+  </div>
+</section>
+</main>
+<div class="toast" id="toast" hidden role="status"></div>
+
+<!-- Plain scripts (not ES modules) so the app also works when index.html is opened straight from disk. Order matters. -->
+<script src="js/data.js"></script>
+<script src="js/storage.js"></script>
+<script src="js/lessons.js"></script>
+<script src="js/util.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/song.js"></script>
+<script src="js/kit.js"></script>
+<script src="js/engine.js"></script>
+<script src="js/sheet.js"></script>
+<script src="js/midi.js"></script>
+<script src="js/mic.js"></script>
+<script src="js/importers.js"></script>
+<script src="js/library.js"></script>
+<script src="js/editor.js"></script>
+<script src="js/app.js"></script>
+
+</body>
+</html>
