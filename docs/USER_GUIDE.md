@@ -6,6 +6,7 @@ This guide walks through every screen, assuming you've never played drums before
 - [Practice screen](#practice-screen)
 - [Library](#library)
 - [Note editor](#note-editor)
+- [Reading sheet music](#reading-sheet-music)
 - [Kit setup](#kit-setup)
 - [Tips for beginners](#tips-for-beginners)
 - [Frequently asked questions](#frequently-asked-questions)
@@ -86,7 +87,7 @@ A simplified version of real drum notation, scrolling with the music. Cymbals ar
 - **Adding music:** drop a file on the dashed box or use the buttons:
   - **MIDI file:** most drum MIDI files have the drums on channel 10, which the app reads.
   - **MusicXML:** export from MuseScore, Sibelius, Guitar Pro, etc. Choose *uncompressed MusicXML*.
-  - **PDF or photo:** opens the note editor with your sheet shown above the grid. Copy the notes across.
+  - **PDF or photo:** reads the notes automatically (see [Reading sheet music](#reading-sheet-music)).
   - **Write it yourself:** an empty note editor.
 
 Imported songs always open in the editor first, so you can check them.
@@ -98,15 +99,49 @@ Imported songs always open in the editor first, so you can check them.
 - Each **row** is a drum; each **column** is a 16th note. The numbers on top are beats (1, 2, 3, 4), with **&** halfway between.
 - **Click** a square to add or remove a note; **drag** to paint several.
 - **Title, Tempo, Bars, Beats per bar:** set these first. Reducing bars removes notes past the end.
-- **Show sheet to copy from:** opens a PDF or photo above the grid.
+- **Read notes from a sheet:** reads a PDF or photo and loads the notes (see below). The sheet stays visible above the grid; **Read again** retries with the other reader.
 - **Record from kit:** a 1-bar count-in, then everything you play is snapped onto the grid for the length of the song. Recording adds to what's already there; use **Clear** to start over.
 - **Listen:** plays the pattern with the app's drum sounds.
 - **Save:** stores it in My songs. **Practise this** saves and opens it on the practice screen.
 - Editing a built-in lesson saves a copy, so the lesson itself stays as it was.
 
+## Reading sheet music
+
+1. In **Library**, press **PDF or photo** (or drop the file on the dashed box). You can also use **Read notes from a sheet** in the note editor.
+2. Check the page previews, then pick a reader:
+   - **AI reader:** uses Claude with **your own** API key. Best for photos and anything complex. It works out the time signature and tempo itself.
+   - **Offline reader:** free and private. Choose the time signature (4/4 or 3/4) first.
+3. Press **Read notes**. The song opens in the note editor with the sheet above the grid. After the offline reader, the sheet is marked with what was found: coloured circles around notes, blue lines on barlines and bar numbers.
+4. Compare the grid with the sheet, fix anything wrong, set the tempo, then press **Practise this**.
+
+**Setting up the AI reader (Library → Sheet reading):**
+1. Create a key at [console.anthropic.com](https://console.anthropic.com/settings/keys). While you're there, set a monthly spend limit.
+2. Paste it into **Your Anthropic API key** and press **Save key**, then **Test key**.
+3. Untick **Remember the key on this device** if you'd rather paste it each session (useful on a shared computer).
+4. **Model:** Sonnet is a good balance; Opus is the most careful and costs more; Haiku is cheapest but makes more mistakes.
+5. **Which reader:** "AI if a key is set, otherwise offline" is the default.
+
+The key is stored only in this browser and sent only to Anthropic. It is not in the app's code or on GitHub, so anyone else using the app needs their own.
+
+**Getting good results from the offline reader:**
+- Use a PDF, or a photo taken straight on from above, in good even light, with the whole page in frame.
+- Printed music works; handwriting doesn't.
+- Simple grooves and fills read well. Triplets, repeat signs, "repeat bar" marks, multi-bar rests and very dense 32nd-note passages don't. Use the AI reader for those.
+
 ## Kit setup
 
 ![Kit setup](screenshots/setup.png)
+
+### Your kits
+![Kit editor](screenshots/kits.png)
+
+The drawing on the practice screen is your kit, and you can change it to match the real one:
+- **Add a piece:** choose a type and press **Add**. It goes into a free spot; **drag** it to the right place.
+- **Rename** a piece by editing its name, **resize** it with its slider, or **Remove** it.
+- **Create kit** from a preset (standard, small, big) or as a copy of the current kit. Choose which kit you're using with **Kit in use**, and **Delete kit** (press twice) to remove one.
+- Each kit keeps its own **pad mapping** and **microphone training**, so set those up for each kit.
+- If a song uses a piece your kit doesn't have, it's played on the closest piece you do have (Tom 3 → Tom 2, Crash 2 → Crash, and so on). A second kick pedal counts as the **left foot** of a double pedal.
+- Extra pieces get their own keyboard keys; the list is under *No kit plugged in?*
 
 ### E-kit over USB
 Connect the module by USB, press **Connect**, and allow MIDI. **Last note received** shows the note number of each pad you hit, which is useful for troubleshooting.
@@ -158,4 +193,7 @@ Use Chrome or Edge (Safari can't read MIDI), check that the module is on, try an
 Use headphones for the app's sound, or turn the metronome off and rely on the count-in.
 
 **Can it read my PDF automatically?**
-Not in this version. It shows the PDF next to the editor so you can copy it across.
+Yes: use the AI reader (with your own API key) for the best results, or the free offline reader for clean printed sheets. Always check the result in the note editor.
+
+**Will other people using my app spend my API credit?**
+No. There's no key in the app. Each person adds their own key in their own browser.

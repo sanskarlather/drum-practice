@@ -11,6 +11,8 @@ How the app works, for anyone (including future me) changing the code.
 - [Inputs](#inputs)
 - [Microphone mode](#microphone-mode)
 - [Sound](#sound)
+- [Kits](#kits)
+- [Sheet reader](#sheet-reader)
 - [Importers](#importers)
 - [Storage](#storage)
 - [Offline support](#offline-support)
@@ -18,9 +20,9 @@ How the app works, for anyone (including future me) changing the code.
 
 ## Principles
 
-- **No build step and no dependencies.** Plain HTML, CSS and JavaScript. Open `index.html` and it runs.
+- **No build step.** Plain HTML, CSS and JavaScript. Open `index.html` and it runs. The only third-party code is PDF.js in `vendor/`.
 - **Works from disk and from GitHub Pages.** Scripts are classic `<script>` tags rather than ES modules, because browsers block modules on `file://` pages. Top-level `const`, `let` and `function` declarations are shared across files.
-- **Everything stays on the device.** No network requests except Google Fonts (the app still works without them).
+- **Everything stays on the device** unless you use the AI sheet reader, which sends page images to Anthropic with your own key. Otherwise the only network request is Google Fonts, and the app works without them.
 - **One clock.** All timing uses the Web Audio clock (`AudioContext.currentTime`), so the metronome, the visuals, MIDI hits and microphone hits line up.
 
 ## Files and load order
@@ -29,10 +31,11 @@ Order matters only for code that runs at load time (later files may call functio
 
 | File | Responsibility |
 |---|---|
-| `data.js` | `DRUMS`: id, name, colour, position and size on the kit drawing, position on the staff, keyboard key, hand/foot. `DEFAULT_MAP`: MIDI notes per drum (Alesis Nitro Mesh plus General MIDI). |
+| `data.js` | `PIECE_TYPES` (how each kind of piece is drawn, notated and grouped), piece ids and names, `FALLBACK` between pieces, `DEFAULT_MAP` (Alesis Nitro Mesh + General MIDI notes), `GM` for importers. `DRUMS`/`D` hold the active kit. |
 | `storage.js` | `store` (localStorage with an in-memory fallback), `settings`, `bests`. |
 | `lessons.js` | `pat()` builds a lesson from text rows such as `"x...x...x...x..."`; `LESSONS`; the user's `songs`. |
 | `util.js` | `$`, `el` (SVG), `h` (HTML), `esc`, `toast`, `uid`. |
+| `kits.js` | Kits and presets, `applyKit()` (fills `DRUMS`/`D`), `resolveDrum()`, adding/removing/dragging pieces, the kit editor. |
 | `audio.js` | Lazily creates the `AudioContext`; synthesised drum sounds `playDrum()` and `click()`. |
 | `song.js` | `compile(song)` turns a song into timed events with hand assignments. |
 | `kit.js` | Builds the kit SVG once; helpers to set hand tags, flash a drum and float feedback text. |
@@ -42,6 +45,7 @@ Order matters only for code that runs at load time (later files may call functio
 | `mic.js` | Microphone hit detection, drum teaching, delay measurement, `judgeOnset()`. |
 | `importers.js` | `parseMidi()` and `parseMusicXML()`. |
 | `library.js` | Library lists, imports, saving songs. |
+| `sheetreader.js` | PDF/photo → pages (PDF.js), the AI reader, the offline reader, the reading dialog and API key settings. |
 | `editor.js` | Note grid, record from kit, listen, sheet tracing. |
 | `app.js` | Navigation between screens, control wiring, start-up. |
 
@@ -63,11 +67,20 @@ Order matters only for code that runs at load time (later files may call functio
 ```
 
 - `s` is the position in **16th-note steps** from the start (a 4/4 bar has 16 steps).
-- `d` is a drum id: `crash`, `ride`, `hihat`, `tom1`, `tom2`, `snare`, `floor`, `kick`, `hhp` (hi-hat pedal).
+- `d` is a piece id: `crash`, `ride`, `hihat`, `tom1`, `tom2`, `snare`, `floor`, `kick`, `hhp` (hi-hat pedal), plus extra pieces such as `tom3`, `floor2`, `crash2`, `splash`, `china`, `ride2`, `kick2`. Ids not in the active kit are mapped with `resolveDrum()`.
+
+### Kit (saved as `drumapp.kits`)
+
+```js
+{ id: "K…", name: "My kit",
+  pieces: [ { id: "tom3", type: "tom", name: "Tom 3", cx: 560, cy: 190, r: 48 } ],
+  map: { tom3: [47] },          // MIDI notes per piece
+  cal: { tom3: { p:[…], tot, dr, n } } }   // microphone fingerprints per piece
+```
 
 ### Settings (saved as `drumapp.settings`)
 
-`metro`, `demo`, `hitSnd`, `vol`, `loop`, `wait`, `view`, `offset` (ms, USB/tap timing adjustment), `map` (`{drumId: [midiNote, …]}`), `lastSong`, and `mic`: `{sens, offset, check, cal}`, where `cal` holds the taught drum fingerprints.
+`metro`, `demo`, `hitSnd`, `vol`, `loop`, `wait`, `view`, `offset` (ms, USB/tap timing adjustment), `lastSong`, `kit` (active kit id), `mic`: `{sens, offset, check}`, and `ai`: `{key, remember, model, method}`. At runtime `settings.map` and `settings.mic.cal` point at the active kit's `map` and `cal`; they're saved with the kits, not in settings.
 
 ## From song to events
 
@@ -144,6 +157,39 @@ To compare against **several drums at once** (e.g. kick + hi-hat), the taught ba
 
 `audio.js` synthesises every sound, so there are no audio files: kick (sine pitch drop), snare (filtered noise plus tone), hi-hats and cymbals (filtered noise), toms (pitched sines), metronome (short square wave). Everything goes through one master gain (the Volume slider).
 
+## Kits
+
+- `PIECE_TYPES` defines each kind of piece: how it's drawn (`kind`: cym, drum, kick, pedal), its default size and colours, its staff position for the 1st, 2nd, 3rd… piece of that type, whether it's played by hand, and its `group` (toms, cymbals) for forgiving microphone checking.
+- `applyKit(kit)` builds `DRUMS`/`D` from the kit's pieces, assigning colours, staff positions, keyboard keys (the classic keys for the standard pieces, then spare letters) and feet (first kick = right foot, others and the hi-hat pedal = left foot).
+- `resolveDrum(id)` returns the piece to play for a song's id: the piece itself, else the first available entry in `FALLBACK[id]`, else any piece of the same type. `compile()`, the editor and live MIDI input all go through it, so lessons written for a 5-piece kit play on any kit.
+- `kitChanged()` re-applies the kit and redraws everything (practice kit, sheet, editor grid, pad mapping, mic rows).
+- New pieces are placed in the emptiest spot of a zone that suits their type, away from other pieces, the bass drum and the seat. Dragging uses pointer events on the editor's SVG with `getScreenCTM()` to convert to drawing coordinates.
+- A MIDI note can only belong to one piece: `dedupeMap()` gives notes listed in `EXTRA_MAP` to the extra piece (e.g. 57 to Crash 2 rather than Crash).
+
+## Sheet reader
+
+`sheetreader.js` turns a PDF or image into page canvases. PDF pages are rendered with **PDF.js** (`vendor/pdfjs`) at ~2200 px on the long edge. On `file://` pages the PDF.js worker runs on the main thread, because browsers won't start workers there. Up to 8 pages are read.
+
+### AI reader
+- Pages are downscaled to 1568 px on the long edge, JPEG-encoded, and sent in one Messages API request (`POST https://api.anthropic.com/v1/messages`) straight from the browser, with the `anthropic-dangerous-direct-browser-access: true` header.
+- **The key is the user's own**, read from `settings.ai` (localStorage) or kept in memory for the session only. No key exists in the code.
+- The prompt asks for every bar written out on a 16th-note grid (repeats expanded), with standard drum-notation positions and any legend on the page taking priority. The answer is constrained with structured outputs (`output_config.format` JSON schema). If the API rejects that parameter, the request is retried asking for plain JSON.
+- Errors are translated into plain messages (bad key, rate limit, out of credit, busy, too long).
+
+### Offline reader (optical music recognition)
+Per page:
+1. **Binarise** with an adaptive (Bradley) threshold, so uneven light in photos doesn't matter.
+2. **Deskew:** try angles from −5° to +5° and keep the one whose row histogram is sharpest; rotate if it's more than 0.25°.
+3. **Find staves:** rows that are mostly dark become line candidates; five with equal spacing make a staff. The spacing `sp` sets the scale for everything else.
+4. **Erase staff and ledger lines**, keeping pixels where a symbol crosses them.
+5. **Vertical strokes** longer than 2.2·sp: those spanning exactly from top line to bottom line are **barlines**; the rest are stems. All are removed.
+6. **Filled noteheads:** erode the image *with the staff lines still in* (lines vanish, heads touching a line stay whole), then keep blobs of notehead size and fill. Two heads touching vertically are split.
+7. **Cymbal x-heads:** cymbals sit at known heights, so those rows are scanned with an x-shaped template (both diagonals dark, centre-edges light).
+8. **Pitch → piece:** staff position (half-spaces above the bottom line) and head shape map to pieces (filled F4 = kick, C5 = snare, x on G5 = hi-hat, x on A5 = crash…).
+9. **Rhythm:** within each bar, notes at the same x form a column. Assuming roughly proportional spacing, the reader fits quarter, 8th or 16th grids and picks the best fit, with a small preference for simpler grids. Leading rests are detected from the usual gap after a barline.
+
+An overlay image shows what was found. Measured on sheets drawn by the app: 198/198 notes on clean pages, 197/198 on a rotated, blurred, unevenly lit "photo" (see TESTING.md). Real engraved music varies more, which is why the result always opens in the editor for checking.
+
 ## Importers
 
 - **MIDI** (`parseMidi`): reads standard MIDI files (format 0/1, PPQ timing). It uses note-ons on channel 10 (falling back to any note with a General MIDI drum number), the first tempo and the time signature. Ticks are rounded to 16th notes.
@@ -159,8 +205,10 @@ To compare against **several drums at once** (e.g. kick + hi-hat), the taught ba
 
 ## Making common changes
 
+- **Add a piece type:** add it to `PIECE_TYPES`, `BASE_IDS`, `BASE_NAMES` and `FALLBACK` in `data.js` (and to `AI_DRUMS`/`AI_TO_ID` in `sheetreader.js` if the AI should know it).
+- **Add a kit preset:** add an entry to `KIT_PRESETS` in `kits.js`: `[type, x, y, radius]` per piece.
 - **Add a lesson:** add a `pat(...)` line in `lessons.js`. Each row string is one bar of 16 characters, `x` for a hit; an array gives one string per bar.
-- **Change the kit layout:** edit `cx`, `cy`, `r` in `DRUMS` (`data.js`). The drawing is 880 × 610 units.
+- **Change the default kit layout:** edit the `standard` preset in `kits.js`. The drawing is 880 × 610 units.
 - **Support another e-kit:** add its note numbers to `DEFAULT_MAP`, or just use *Learn* in Kit setup.
 - **Change grading windows:** the 45 / 100 / 160 ms values are in `judge()` (`engine.js`) and `judgeOnset()` (`mic.js`).
 - **Tune the microphone:** detection constants are in `OnsetCore`; the strictness factors (1.0 / 1.25 / 1.1) are in `micDrumCheck`.

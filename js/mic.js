@@ -58,7 +58,7 @@ registerProcessor("onset-proc", OnsetProc);
 `;
 
 const MIC = {stream:null, src:null, node:null, sink:null, on:false, teach:null, teachHits:[], measuring:null, warned:false};
-const MIC_GROUPS = {tom1:"toms", tom2:"toms", floor:"toms", crash:"cyms", ride:"cyms"};
+const micGroup = id => D[id] && D[id].group;
 const MIC_TEACH_HITS = 6;
 
 /* --- fingerprints --- */
@@ -92,11 +92,11 @@ function micDrumCheck(o, drums){
   let dExp = micDist(v, micCalFeat(exp));
   for (const d of exp) dExp = Math.min(dExp, micDist(v, micCalFeat([d])) * (exp.length>1 ? 1.1 : 1));
   const lenient = mode === "lenient";
-  const groups = new Set(exp.map(d=>MIC_GROUPS[d]).filter(Boolean));
+  const groups = new Set(exp.map(d=>micGroup(d)).filter(Boolean));
   let dAlt = Infinity;
   for (const id of taught) {
     if (exp.includes(id)) continue;
-    if (lenient && MIC_GROUPS[id] && groups.has(MIC_GROUPS[id])) continue;
+    if (lenient && micGroup(id) && groups.has(micGroup(id))) continue;
     dAlt = Math.min(dAlt, micDist(v, micCalFeat([id])));
   }
   return {ok: dExp <= dAlt * (lenient ? 1.25 : 1.0), heard:best};

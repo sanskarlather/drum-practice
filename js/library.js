@@ -28,10 +28,8 @@ async function importFile(file){
     if (ext==="mid" || ext==="midi") { const s = parseMidi(new Uint8Array(await file.arrayBuffer()), name); finishImport(s, "MIDI file"); }
     else if (ext==="xml" || ext==="musicxml") { const s = parseMusicXML(await file.text(), name); finishImport(s, "MusicXML"); }
     else if (ext==="mxl") toast("Compressed .mxl isn't supported yet. Export as uncompressed MusicXML (.musicxml).");
-    else if (ext==="pdf" || file.type.startsWith("image/")) {
-      const s = {id:uid(), title:name, bpm:80, bars:4, beats:4, notes:[], source:"Copied from sheet"};
-      openEditor(s); showTrace(file); toast("Copy the notes from your sheet onto the grid, then Save");
-    } else toast("That file type isn't supported");
+    else if (ext==="pdf" || file.type.startsWith("image/")) srOpen(file);
+    else toast("That file type isn't supported");
   } catch(err) { console.error(err); toast("Couldn't read that file: "+err.message); }
 }
 function finishImport(s, src){

@@ -35,12 +35,12 @@ function updateInputPill(){
   p.className = "pill " + cls; $("#midiText").textContent = txt;
   const q = $("#quickMic"); if (q) { q.textContent = MIC.on ? "Microphone on · turn off" : "Listen with microphone"; q.className = MIC.on ? "btn on" : "btn"; }
 }
-function noteToDrum(n){ for (const [d, arr] of Object.entries(settings.map)) if (arr.includes(n)) return d; return GM[n] || null; }
+function noteToDrum(n){ for (const d of DRUMS) if ((settings.map[d.id]||[]).includes(n)) return d.id; return GM[n] ? resolveDrum(GM[n]) : null; }
 function onMidi(e){
   const [st, n, v] = e.data; if ((st & 0xF0) !== 0x90 || !v) return;
   $("#lastNote").textContent = `${n} (velocity ${v})`;
   if (learnFor) {
-    for (const k in settings.map) settings.map[k] = settings.map[k].filter(x=>x!==n);
+    for (const k in settings.map) settings.map[k] = (settings.map[k]||[]).filter(x=>x!==n);
     settings.map[learnFor].unshift(n); saveSettings(); toast(`Note ${n} now plays ${D[learnFor].name}`); learnFor=null; renderMap(); return;
   }
   const d = noteToDrum(n);

@@ -28,10 +28,10 @@ $("#endAgain").onclick = ()=>start(0);
 $("#endSlower").onclick = ()=>{ setTempo(E.bpm-10); start(0); };
 $("#endNext").onclick = ()=>{ const i = LESSONS.findIndex(l=>l.id===E.C.song.id); if (LESSONS[i+1]) loadSong(LESSONS[i+1]); };
 $("#connectBtn").onclick = ()=>connectMidi(true);
-$("#mapReset").onclick = ()=>{ settings.map = JSON.parse(JSON.stringify(DEFAULT_MAP)); saveSettings(); renderMap(); toast("Pads reset to Alesis Nitro Mesh defaults"); };
+$("#mapReset").onclick = ()=>{ const k = activeKit(); for (const p of k.pieces) k.map[p.id] = defaultNotesFor(p.id); dedupeMap(k); applyKit(k); saveSettings(); renderMap(); toast("Pads reset to Alesis Nitro Mesh defaults"); };
 $("#offset").value = settings.offset; $("#offOut").textContent = settings.offset+" ms";
 $("#offset").oninput = e=>{ settings.offset=+e.target.value; $("#offOut").textContent = settings.offset+" ms"; saveSettings(); };
-$("#keyList").innerHTML = DRUMS.map(d=>`<span><kbd>${KEYNAMES[d.key]||d.key.toUpperCase()}</kbd> ${esc(d.name)}</span>`).join("") + `<span><kbd>Enter</kbd> Play / pause</span>`;
+$("#keyList").innerHTML = keyListHtml();
 // file picking
 $("#pickFile").onclick = ()=>{ $("#fileIn").accept = ".mid,.midi,.xml,.musicxml,.pdf,image/*"; $("#fileIn").click(); };
 document.querySelectorAll("[data-pick]").forEach(b=>b.onclick=()=>{ $("#fileIn").accept=b.dataset.pick; $("#fileIn").click(); });
@@ -44,7 +44,7 @@ drop.addEventListener("drop", e=>{ e.preventDefault(); drop.classList.remove("ov
 document.addEventListener("visibilitychange", ()=>{ if (document.hidden) pause(); });
 
 /* ---------- Init ---------- */
-buildKit(); renderMap(); micWire();
+buildKit(); renderMap(); micWire(); srWire(); kitWire();
 $("#quickMic").onclick = ()=> MIC.on ? micStop() : micStart().then(ok=>{ if (!ok) { show("setup"); toast("Microphone couldn't start. See Kit setup."); } else if (!micTaught().length) toast("Listening. Teach it your drums in Kit setup for drum checking"); });
 updateInputPill(); renderLibrary(); applyView();
 loadSong(findSong(settings.lastSong) || LESSONS[0]);

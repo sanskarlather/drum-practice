@@ -165,3 +165,23 @@ kbd{font-family:var(--mono);font-size:12px;background:var(--btn);border:1px soli
 .meter #micLvl{position:absolute;left:0;top:0;bottom:0;width:0;background:var(--green);transition:width .05s linear}
 .meter #micThr{position:absolute;top:-2px;bottom:-2px;width:2px;background:#F2F2F0}
 .btn:disabled{opacity:.6;cursor:default}
+
+/* sheet reader dialog */
+.modal{position:fixed;inset:0;background:rgba(8,9,11,.78);display:flex;align-items:center;justify-content:center;padding:16px;z-index:40}
+.modal-card{width:min(560px,100%);max-height:92vh;overflow:auto}
+.sr-preview{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px}
+.sr-preview img{height:150px;border-radius:8px;background:#fff;flex:none}
+
+/* kit editor */
+.setup > .card.kitcard{flex:1 1 100%}
+.kit-edit-wrap{display:flex;flex-wrap:wrap;gap:16px}
+.kit-edit-draw{flex:3 1 420px;min-width:0;background:var(--panel2);border:1px solid var(--line);border-radius:16px;padding:8px}
+.kit-edit-draw svg{display:block;width:100%;height:auto;touch-action:none;user-select:none}
+.kit-edit-side{flex:2 1 300px;min-width:0}
+#kitPieces{max-height:460px;overflow:auto}
+.piece-row{display:flex;align-items:center;gap:8px;padding:6px 0;border-top:1px solid var(--line);flex-wrap:wrap}
+.piece-row i{width:12px;height:12px;border-radius:50%;flex:none}
+.piece-row input[type=text]{flex:1 1 120px;min-width:0;min-height:38px}
+.piece-row input[type=range]{flex:1 1 80px}
+.piece.editable .body{filter:none}
+.piece.editable:active{cursor:grabbing}

@@ -2,6 +2,18 @@
 
 All notable changes to this project. Dates are YYYY-MM-DD.
 
+## [0.3.0] - 2026-11-23
+### Added
+- Automatic reading of PDF and photo sheet music:
+  - AI reader using each user's **own** Anthropic API key (stored only in their browser, never in the app), with model choice, key test, and remember-or-session-only storage.
+  - Free offline reader (optical music recognition in the browser) with an overlay showing what was found.
+  - Reading dialog with page previews; results open in the note editor next to the sheet.
+- Customisable kits: several kits, add/remove/rename/resize/drag pieces (extra toms, floor toms, crashes, splash, china, second kick), presets, per-kit pad mapping and microphone training, and automatic fallback for songs that use pieces your kit doesn't have.
+- PDF.js (Mozilla, Apache 2.0) in `vendor/pdfjs`.
+- Tests for the sheet reader and kits; a sample PDF.
+### Changed
+- PDFs shown above the note editor are now drawn as page images, which also works on phones.
+
 ## [0.2.0] - 2026-11-23
 ### Added
 - Microphone mode for acoustic kits or when the e-kit can't connect: hit detection, "Teach it your drums", forgiving/strict/timing-only drum checking, and automatic delay measurement.

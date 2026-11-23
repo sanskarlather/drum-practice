@@ -2,10 +2,12 @@
 /* ---------- Editor ---------- */
 let ED = null; // song being edited (copy)
 let traceURL = null;
-const EDROWS = ["crash","ride","hihat","tom1","tom2","snare","floor","kick","hhp"];
+// rows = the active kit, top to bottom as on a drum staff
+const edRows = () => DRUMS.slice().sort((a,b)=>a.staff-b.staff || DRUMS.indexOf(a)-DRUMS.indexOf(b)).map(d=>d.id);
 function openEditor(s){
   stop();
   ED = JSON.parse(JSON.stringify(s));
+  ED.notes = resolveNotes(ED.notes || []);
   if (s.builtin) { ED.id = uid(); ED.title = s.title.replace(/^\d+\s·\s/,"") + " (my copy)"; ED.builtin=false; ED.source="Edited lesson"; }
   ED.beats = ED.beats||4;
   $("#edTitle").value = ED.title; $("#edBpm").value = ED.bpm; $("#edBars").value = ED.bars; $("#edBeats").value = ED.beats;
@@ -18,7 +20,7 @@ function renderGrid(){
   g.appendChild(h("div",{class:"rh",style:"border-top:0"},""));
   for (let s=0;s<total;s++){ const i=s%spb; const lab = i%4===0 ? (i===0?`${Math.floor(s/spb)+1}.1`:String(i/4+1)) : i%4===2 ? "&" : "·"; g.appendChild(h("div",{class:"hd"+(i%4===0?" b":"")+(i===0?" bar":"")},lab)); }
   const on = new Set(ED.notes.map(n=>n.s+"|"+n.d));
-  for (const d of EDROWS){
+  for (const d of edRows()){
     const dd = D[d];
     g.appendChild(h("div",{class:"rh"},`<i style="background:${dd.color}"></i>${esc(dd.name)}`));
     for (let s=0;s<total;s++){
@@ -74,14 +76,22 @@ function editorStopped(m){
   if (m==="record") toast(`Recorded. ${ED.notes.length} notes on the grid`);
   const s = findSong(settings.lastSong) || LESSONS[0]; E.C = compile(s); E.bpm = +$("#tempo").value || s.bpm; resetJudgements(); E.pos = 0;
 }
-function showTrace(file){
+// Shows the sheet above the grid. PDFs are drawn as page images (works on phones and offline too).
+let traceFile = null;
+async function showTrace(file){
   if (traceURL) URL.revokeObjectURL(traceURL);
-  traceURL = URL.createObjectURL(file); const v = $("#traceView"); v.innerHTML = "";
-  if (file.type==="application/pdf" || /\.pdf$/i.test(file.name)) { const o = h("object",{data:traceURL,type:"application/pdf"}); o.innerHTML = '<p style="color:#333;padding:12px;margin:0">This browser can\'t show the PDF here. Use "Open in new tab".</p>'; v.appendChild(o); }
-  else { const im = h("img",{src:traceURL,alt:"Your sheet music"}); v.appendChild(im); }
-  $("#traceOpen").href = traceURL; $("#trace").hidden = false;
+  traceFile = file; traceURL = URL.createObjectURL(file); $("#traceOpen").href = traceURL;
+  $("#traceCaption").textContent = "Your sheet";
+  const v = $("#traceView"); v.innerHTML = '<p style="color:#333;padding:12px;margin:0">Opening…</p>'; $("#trace").hidden = false;
+  try { const { canvases } = await srFileToCanvases(file); v.innerHTML = ""; canvases.forEach(c => v.appendChild(h("img",{src:c.toDataURL("image/jpeg",0.85),alt:"Sheet music page"}))); }
+  catch (e) { v.innerHTML = '<p style="color:#333;padding:12px;margin:0">Couldn\'t show this file here. Use "Open in new tab".</p>'; }
 }
+function showTraceCanvases(canvases, caption){
+  const v = $("#traceView"); v.innerHTML = ""; canvases.forEach(c => v.appendChild(h("img",{src:c.toDataURL("image/jpeg",0.85),alt:"Sheet music page with the notes the reader found marked"})));
+  $("#traceCaption").textContent = caption || "Your sheet"; $("#trace").hidden = false;
+}
+$("#traceRead").onclick = ()=>{ if (traceFile) srOpen(traceFile); else toast("Open a sheet first"); };
 $("#edTraceBtn").onclick = ()=>$("#edTraceIn").click();
-$("#edTraceIn").onchange = e=>{ const f=e.target.files[0]; if (f) showTrace(f); e.target.value=""; };
+$("#edTraceIn").onchange = e=>{ const f=e.target.files[0]; if (f) srOpen(f); e.target.value=""; };
 $("#traceClose").onclick = ()=>$("#trace").hidden = true;
 

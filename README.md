@@ -24,6 +24,8 @@ It runs entirely in the browser: there is no server or account, and nothing you 
 - [Quick start](#quick-start)
 - [Using it with an e-kit (Alesis Nitro Mesh)](#using-it-with-an-e-kit-alesis-nitro-mesh)
 - [Using it with a microphone](#using-it-with-a-microphone)
+- [Reading sheet music (PDF or photo)](#reading-sheet-music-pdf-or-photo)
+- [Customising your kit](#customising-your-kit)
 - [Adding your own music](#adding-your-own-music)
 - [Browser and device support](#browser-and-device-support)
 - [Known limitations](#known-limitations)
@@ -54,9 +56,14 @@ It runs entirely in the browser: there is no server or account, and nothing you 
 **Music**
 - 10 built-in beginner lessons, from "hi-hat only" to fills around the toms.
 - Import **MIDI** (`.mid`) and **MusicXML** (`.musicxml`, `.xml`) files.
-- Open a **PDF or photo** of sheet music next to the note editor so you can copy it across.
+- **Read a PDF or photo of drum sheet music automatically**, with the AI reader (your own Anthropic API key) or the free offline reader.
 - A **note editor**: click a grid, or **record from your kit** after a count-in.
 - Your songs and best scores are saved in your browser.
+
+**Kits**
+- Keep several kits (for example "Nitro Mesh at home" and "Acoustic kit at class") and switch between them.
+- Add more of any piece (extra toms, floor toms, crashes, splash, china, a second kick for a double pedal), remove what you don't have, rename pieces, resize them and drag them into place.
+- Each kit has its own pad mapping and microphone training. Songs written for other kits play on the closest pieces you have.
 
 **Works on your phone**
 - Responsive layout for phones and tablets.
@@ -98,13 +105,42 @@ Microphone mode is for acoustic kits, or for when the e-kit won't connect.
 
 What to expect: timing detection is reliable. Telling kick, snare and hi-hat apart works well. Similar drums (two toms, crash vs ride) and three or more drums at once are less reliable, which is why the forgiving mode exists. Details are in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#microphone-mode).
 
+## Reading sheet music (PDF or photo)
+
+In **Library**, choose **PDF or photo** (or drop the file on the page). The app shows the pages, you pick a reader, and the notes it finds open in the note editor next to the sheet so you can check them.
+
+| | AI reader | Offline reader |
+|---|---|---|
+| How it works | Sends the page images to Claude (Anthropic) | Optical music recognition, in your browser |
+| Accuracy | Best; handles photos, repeats, most notation | Good on clean printed sheets with simple rhythms |
+| Cost | Charged to **your own** Anthropic API account | Free |
+| Privacy | Pages are sent to Anthropic | Nothing leaves your device |
+| Needs | An API key and internet | Nothing |
+
+**Your own API key.** The AI reader never uses a key built into the app: there isn't one. Each person who wants it pastes their own key under **Library → Sheet reading**. It's stored only in that browser (or for the current session only, if you untick *Remember*), it's sent only to Anthropic, and it's never part of this repository. So nobody using your copy of the app can run up charges on your account. Get a key at [console.anthropic.com](https://console.anthropic.com/settings/keys) and set a monthly spend limit there. Without a key, the app uses the offline reader.
+
+The offline reader marks what it found on the page (circles around notes, blue barlines, bar numbers), so you can spot mistakes quickly. Either way, always check the result before practising.
+
+## Customising your kit
+
+In **Kit setup → Your kits**:
+
+![Kit editor with an extra tom, crash and kick pedal added](docs/screenshots/kits.png)
+
+1. **Add a piece:** pick a type (crash, ride, splash, china, hi-hat, snare, rack tom, floor tom, kick pedal, hi-hat pedal) and press **Add**. It's placed in a free spot; drag it to where it sits on your real kit.
+2. **Rename, resize or remove** pieces in the list.
+3. **Create kit** makes a new one from a preset (standard 5-piece, small 4-piece, big kit) or a copy of the current kit. Switch kits with **Kit in use**.
+4. New pieces get sensible MIDI notes where there's a standard one (for example crash 2 gets note 57). For pads that send something else, use **Learn** under **Pad mapping**.
+
+Each kit remembers its own layout, pad mapping and microphone training. If a song uses a piece your kit doesn't have (for example Tom 3 on a kit with two toms), it's played on the closest piece you do have. A second kick pedal is treated as the left foot of a double pedal.
+
 ## Adding your own music
 
 | Source | How it's handled |
 |---|---|
 | MIDI file | Drum notes (channel 10) become notes on the grid, with tempo and time signature. |
 | MusicXML | Read from instrument names, or from note positions in standard drum notation. Export *uncompressed* (`.musicxml`), not `.mxl`. |
-| PDF / photo | Shown above the note editor so you can copy the notes onto the grid by hand. Automatic reading of printed notation isn't supported. |
+| PDF / photo | Read automatically by the AI or offline reader (see above), then opened in the editor with the sheet shown above the grid. |
 | Note editor | Click squares (16th notes) or press **Record from kit**. |
 
 Every import opens in the note editor first so you can check it. The [`samples/`](samples) folder has a MIDI and a MusicXML file to try.
@@ -118,9 +154,12 @@ Every import opens in the note editor first so you can check it. The [`samples/`
 | Firefox (desktop) | Yes | Yes (asks for permission) | Yes | No |
 | Safari on Mac / iPhone / iPad | Yes | **No** (Safari has no Web MIDI) | Yes | iPhone: "Add to Home Screen" |
 
+The offline sheet reader works everywhere; the AI reader needs an internet connection.
+
 ## Known limitations
 
-- PDF/photo import doesn't read notation automatically; you copy it onto the grid.
+- The **offline sheet reader** works best on clean, printed, straight sheets with simple rhythms. It assumes notes are spaced roughly in proportion to time, so mixed rhythms, triplets, repeat signs, multi-bar rests and handwritten music often come out wrong. It reads up to 8 pages.
+- The **AI reader** is much better but can still make mistakes, needs internet and your own API key, and costs a little per page.
 - The note grid is 16th notes only. Triplets, swing and grace notes are rounded to the nearest 16th.
 - 4/4 and 3/4 only in the editor.
 - Compressed MusicXML (`.mxl`) isn't supported.
@@ -134,10 +173,11 @@ Every import opens in the note editor first so you can check it. The [`samples/`
 index.html            Page layout for all four screens
 css/styles.css        All styling
 js/                   Plain scripts, loaded in this order:
-  data.js             Drum list, kit positions, default MIDI note map
+  data.js             Piece types, default MIDI notes, fallbacks between pieces
   storage.js          Saved settings, songs and best scores (localStorage)
   lessons.js          The 10 built-in lessons
   util.js             Small DOM helpers
+  kits.js             Kits: presets, adding/removing/moving pieces, switching
   audio.js            Synthesised drum sounds and metronome
   song.js             Turns a song into timed events with hand assignments
   kit.js              Draws the kit and animates lights, rings and hand tags
@@ -147,26 +187,28 @@ js/                   Plain scripts, loaded in this order:
   mic.js              Microphone hit detection, drum teaching, mic judging
   importers.js        MIDI and MusicXML file readers
   library.js          Library screen and imports
+  sheetreader.js      PDF/photo reading: AI reader and offline reader
   editor.js           Note editor, record from kit, sheet tracing
   app.js              Navigation, controls and start-up
 manifest.webmanifest  App name and icons for "Add to Home screen"
 sw.js                 Offline support (network first)
 icons/                App icons
+vendor/pdfjs/         PDF.js (Mozilla, Apache 2.0) for reading PDF pages
 samples/              Example MIDI and MusicXML files
 tests/                Automated browser tests (Python + Playwright)
 docs/                 User guide, hosting guide, architecture, testing
 ```
 
-There's no build step and no dependencies: edit a file, refresh the page.
+There's no build step and nothing to install: edit a file, refresh the page. The only third-party code is PDF.js, included in `vendor/`.
 
 ## How this was made
 
 This project was built in conversation with an AI assistant (Claude, by Anthropic):
 
-- **Me (the human):** the idea and requirements (an e-kit practice app with a visual kit for absolute beginners, phone support, microphone mode), feedback on the mockups (I asked for the drum kit to be the main element instead of falling notes), choices about devices and features, and testing on real hardware.
+- **Me (the human):** the idea and requirements (an e-kit practice app with a visual kit for absolute beginners, phone support, microphone mode, automatic sheet reading with each user's own API key, customisable kits), feedback on the mockups (I asked for the drum kit to be the main element instead of falling notes), choices about devices and features, and testing on real hardware.
 - **The AI:** the mockups, all of the code, the lessons, the automated tests and the first draft of these documents.
 
-Automated tests (run by the AI in a headless browser) cover playback, judging, wait mode, the importers, the editor, phone layout and microphone hit detection with synthesised drum sounds. They **can't** confirm how it feels with real drums, real rooms or real latency; that's what the human testing checklist in [docs/TESTING.md](docs/TESTING.md) is for.
+Automated tests (run by the AI in a headless browser) cover playback, judging, wait mode, the importers, the editor, phone layout, microphone hit detection with synthesised drum sounds, the offline sheet reader on generated sheets, the AI reader against a stand-in API, and kit customisation. They **can't** confirm how it feels with real drums, real rooms or real latency; that's what the human testing checklist in [docs/TESTING.md](docs/TESTING.md) is for.
 
 If you use or adapt this code, please check it yourself rather than assuming it's correct because it runs.
 
@@ -179,6 +221,9 @@ If you use or adapt this code, please check it yourself rather than assuming it'
 | Microphone mode | Passed with synthesised sounds | _Not yet_ |
 | MIDI / MusicXML import | Passed with sample files | _Not yet_ |
 | Android phone | Layout checked in emulation | _Not yet_ |
+| Offline sheet reader | Passed on sheets drawn by the app (clean, photo-like, PDF) | _Not yet_ (try real sheet music) |
+| AI sheet reader | Request/response checked with a stand-in API; **never run against the real API** | _Not yet_ (needs your key) |
+| Kit customisation | Passed | _Not yet_ |
 
 Update this table as you work through [docs/TESTING.md](docs/TESTING.md).
 
@@ -193,3 +238,5 @@ Update this table as you work through [docs/TESTING.md](docs/TESTING.md).
 ## License
 
 [MIT](LICENSE). Free to use, change and share. Provided as-is, without warranty.
+
+Includes [PDF.js](https://github.com/mozilla/pdf.js) v3.11.174 by Mozilla, under the Apache License 2.0 (see `vendor/pdfjs/LICENSE`).

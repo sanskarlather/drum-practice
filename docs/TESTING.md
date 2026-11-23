@@ -21,10 +21,14 @@ Both matter. Passing automated tests does **not** mean the app works well with y
 | Note editor | Opening a lesson, Listen, Save | Passed |
 | Mic judging | Right sound on time → Perfect; wrong drum → "wrong" | Passed (4/4) |
 | Mic detection | 42 synthesised kick/snare/hi-hat hits, including hi-hats right after kicks, fed in as a fake microphone | Passed: 42/42 detected, 0 false hits, 18/18 single drums identified, 24/24 combinations accepted, 3/3 wrong drums rejected, timing within ~1 ms (AudioWorklet) and ~10 ms (file:// fallback) |
+| Offline sheet reader | All 10 lessons drawn as printed notation on one page, read back and compared note by note | Clean page: 198/198 notes, 0 wrong. Rotated 1.5°, blurred, unevenly lit: 197/198, 0 wrong. Smaller print (1000 px page): 198/198 |
+| PDF import | `samples/rock-beat-sheet.pdf` through the Library with PDF.js and the offline reader | Passed: 48/48 notes, 4 bars |
+| AI sheet reader | With a **stand-in** for the Claude API: request URL, headers, model, image, JSON schema; answer → notes; rejected key → clear message | Passed. **Not tested against the real API** (no key during development) |
+| Kits | Presets; add tom/crash/kick; MIDI note moves to the new crash; second kick = left foot; drag a piece; per-kit pad mapping; fallback (tom2 → tom1 on a small kit); survives reload; remove a piece; big kit practice | Passed (14 checks) |
 | Layout | Desktop (1440 px) and phone (390 px) screenshots checked by eye | Passed |
 | Console | No JavaScript errors on any screen | Passed |
 
-The mic detection test uses **synthesised** drum sounds in a quiet signal, so it's a best case. Real drums, room echo and a phone mic will do worse.
+The mic detection test uses **synthesised** drum sounds in a quiet signal, so it's a best case. Real drums, room echo and a phone mic will do worse. Likewise, the offline sheet reader was tested on notation drawn by this app; sheet music from books, MuseScore or other engravers looks different and will read less reliably.
 
 ### Running them yourself
 
@@ -41,6 +45,8 @@ python -m http.server 8000
 python tests/smoke_test.py              # playback, judging, importers, editor, mic judging
 python tests/make_test_audio.py         # writes tests/out/mic.wav
 python tests/mic_detection_test.py      # fake microphone detection test
+python tests/sheet_reader_test.py       # offline reader, PDF import, AI reader with a stand-in API
+python tests/kits_test.py               # kit customisation
 ```
 
 Each script prints its results and exits with an error if a check fails. Screenshots are saved in `tests/out/`.
@@ -85,6 +91,23 @@ Work through this on your own hardware, then tick each item (edit this file on G
 - [ ] A MIDI file from the internet or another app imports sensibly (which one: ______)
 - [ ] A MusicXML export from MuseScore imports sensibly
 - [ ] A photo of a drum book page shows above the note grid
+
+### Sheet reading
+- [ ] Offline reader: a clean PDF of a simple groove (e.g. exported from MuseScore) reads correctly (score: ___ / ___ notes)
+- [ ] Offline reader: a phone photo of a drum book page (score: ___ / ___ notes)
+- [ ] The overlay on the sheet shows what was read, and mistakes are easy to spot
+- [ ] AI reader: Save key → Test key says it works
+- [ ] AI reader: the same PDF and photo (score: ___ / ___ notes; cost shown in your Anthropic console: ____)
+- [ ] AI reader: a page with repeat signs is written out in full
+- [ ] With **Remember** unticked, the key is gone after closing the browser
+- [ ] Removing the key switches back to the offline reader
+
+### Kits
+- [ ] Create a kit that matches your real kit (pieces, names, positions)
+- [ ] Add a piece your e-kit has an extra pad for, then **Learn** its pad
+- [ ] Switch between two kits: pad mapping and mic training stay separate
+- [ ] A lesson written for 2 toms plays sensibly on your kit
+- [ ] Dragging pieces works on the phone (touch)
 
 ### General
 - [ ] Songs and best scores are still there after closing and reopening the browser
